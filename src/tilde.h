@@ -4,6 +4,9 @@ enum TokenKind
     DECIMAL,
     OCTAL,
     HEXA,
+    FLOAT,
+    HEXAFLOAT,
+    STRING,
 };
 
 struct Token

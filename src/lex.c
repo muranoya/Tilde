@@ -4,7 +4,7 @@
 #include <string.h>
 #include "tilde.h"
 
-#define IDENT_MAXSIZE (128)
+#define IDENT_MAXSIZE (256)
 #define STACK_SIZE (8)
 #define TEST
 
@@ -18,8 +18,11 @@ static int sp;
 /* prototype */
 static int  make_ident(struct Token *tk, int c);
 static int  make_digit(struct Token *tk, int c);
-static int  make_digit_base(int c, int base, char *p);
+static int  make_digit_base(struct Token *tk, int c, int base, char *p);
+static int  make_float_base(int c, int base, char *p);
+static int  make_string_literal(struct Token *tk);
 
+static int  is_simple_escape();
 static int  is_nondigit(int c);
 static int  is_digit(int c, int base);
 static int  is_nonzerodigit(int c, int base);
@@ -69,6 +72,24 @@ nexttoken(struct Token *token)
     {
         return make_digit(token, c);
     }
+    else if (c == '.')
+    {
+        c = nextchar();
+        if (is_digit(c, 10))
+        {
+            pushback(c);
+            char *p = (char*)malloc(sizeof(char)*IDENT_MAXSIZE);
+            token->kind = FLOAT;
+            token->row = line;
+            token->col = column;
+            token->val = p;
+            return make_float_base('.', 10, p);
+        }
+    }
+    else if (c == '"')
+    {
+        return make_string_literal(token);
+    }
     return 0;
 }
 
@@ -103,30 +124,36 @@ make_digit(struct Token *tk, int c)
         c = nextchar();
         if (c == 'x' || c == 'X')
         {
-            ret = make_digit_base(nextchar(), 16, val);
             tk->kind = HEXA;
+            ret = make_digit_base(tk, nextchar(), 16, val);
         }
         else
         {
-            ret = make_digit_base(c, 8, val);
             tk->kind = OCTAL;
+            ret = make_digit_base(tk, c, 8, val);
         }
     }
     else
     {
-        ret = make_digit_base(c, 10, val);
         tk->kind = DECIMAL;
+        ret = make_digit_base(tk, c, 10, val);
     }
     return ret;
 }
 
 static int
-make_digit_base(int c, int base, char *p)
+make_digit_base(struct Token *tk, int c, int base, char *p)
 {
     int len = 0;
     for (; is_digit(c, base); c = nextchar())
     {
         p[len++] = c;
+    }
+
+    if (c == '.' || c == 'e' || c == 'E' || c == 'p' || c == 'P')
+    {
+        tk->kind = (base == 16) ? HEXAFLOAT : FLOAT;
+        return make_float_base(c, base == 16 ? 16 : 10, p+len);
     }
 
     if (c == 'u' || c == 'U')
@@ -161,6 +188,129 @@ make_digit_base(int c, int base, char *p)
     }
     p[len] = 0;
     return 1;
+}
+
+static int
+make_float_base(int c, int base, char *p)
+{
+    int len = 0;
+
+    if (!(base == 10 && (c == '.' || c == 'e' || c == 'E')) &&
+        !(base == 16 && (c == '.' || c == 'p' || c == 'P')))
+    {
+        //error
+        return 0;
+    }
+
+    if (c == '.')
+    {
+        p[len++] = c;
+        c = nextchar();
+        if (is_digit(c, base))
+        {
+            for (; is_digit(c, base); c = nextchar())
+            {
+                p[len++] = c;
+            }
+        }
+    }
+    else if (base == 10)
+    {
+        if (c != 'e' && c != 'E')
+        {
+            //error
+        }
+    }
+
+    if (base == 16 && c != 'p' && c != 'P')
+    {
+        //error
+    }
+
+    if (c == 'e' || c == 'E' || c == 'p' || c == 'P')
+    {
+        p[len++] = c;
+        c = nextchar();
+        if (c == '+' || c == '-')
+        {
+            p[len++] = c;
+            c = nextchar();
+        }
+        
+        for (; is_digit(c, 10); c = nextchar())
+        {
+            p[len++] = c;
+        }
+    }
+
+    if (c == 'f' || c == 'F' || c == 'l' || c == 'L')
+    {
+        p[len++] = c;
+    }
+    p[len] = 0;
+    return 1;
+}
+
+static int
+make_string_literal(struct Token *tk)
+{
+    char *str = (char*)malloc(sizeof(char)*IDENT_MAXSIZE);
+    int size = IDENT_MAXSIZE;
+    int c;
+    int len = 0;
+    tk->row = line;
+    tk->col = column;
+    tk->val = str;
+    tk->kind = STRING;
+    for (;;)
+    {
+        c = nextchar();
+        if (c == '\n')
+        {
+            return 0;
+        }
+        else if (c == '"')
+        {
+            str[len] = 0;
+            return 1;
+        }
+        else
+        {
+            if (len+2 >= size)
+            {
+                str = (char*)realloc(str, sizeof(char)*(size+IDENT_MAXSIZE));
+            }
+            if (c == '\\' && is_simple_escape())
+            {
+                str[len++] = '\\';
+                str[len++] = nextchar();
+            }
+            else
+            {
+                str[len++] = c;
+            }
+        }
+    }
+}
+
+static int
+is_simple_escape()
+{
+    int c = nextchar();
+    switch (c)
+    {
+    case '\'': case '"':
+    case '?':  case '\\':
+    case 'a':  case 'b':
+    case 'f':  case 'n':
+    case 'r':  case 't':
+    case 'v':
+        pushback(c);
+        return 1;
+    default:
+        pushback(c);
+        return 0;
+    }
 }
 
 static int
