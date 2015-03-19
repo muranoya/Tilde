@@ -1,3 +1,6 @@
+#ifndef TILDE_H
+#define TILDE_H
+
 enum TokenKind
 {
     IDENT,
@@ -52,3 +55,4 @@ void closefile();
 void print_token(const struct Token *tk);
 char *print_punctuator(enum PnctID p);
 int  nexttoken(struct Token *token);
+#endif
