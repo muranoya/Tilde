@@ -6,37 +6,55 @@
 
 #define IDENT_MAXSIZE (256)
 #define STACK_SIZE (8)
-#define TEST
+
+#define TEST_LEX
 
 static FILE *file = NULL;
+static int autoclose;
 static int line;
 static int column;
 
 static int stack[STACK_SIZE];
 static int sp;
 
+static char *keywords[] = {
+    "enum",   "unsigned", "break",  "return",  "void",     "case",
+    "float",  "short",    "char",   "for",     "signed",   "while",
+    "const",  "goto",     "sizeof", "bool",    "continue", "if",
+    "static", "default",  "inline", "struct",  "do",       "int",
+    "switch", "double",   "long",   "typedef", "else",     "union",
+    "extern",
+    0,
+};
+
 /* prototype */
+static char *punctuator_tostring(enum PnctID p);
+
+static int  make_endfile(struct Token *tk);
 static int  make_ident(struct Token *tk, int c);
 static int  make_digit(struct Token *tk, int c);
 static int  make_digit_base(struct Token *tk, int c, int base, char *p);
 static int  make_float_base(int c, int base, char *p);
 static int  make_string_literal(struct Token *tk);
+static int  make_punctuator(struct Token *tk, int c);
 
+static int  estimate(int x);
 static int  is_simple_escape();
 static int  is_nondigit(int c);
 static int  is_digit(int c, int base);
-static int  is_nonzerodigit(int c, int base);
 static int  is_space(int c);
 static int  is_return(int c);
 
+static void set_keyword(struct Token *tk);
 static void skip();
 static void pushback(int c);
 static int  nextchar();
 
 int
-openfile(char *f)
+openfile(const char *f, int ac)
 {
     file = fopen(f, "r");
+    autoclose = ac;
     if (file == NULL)
     {
         perror("fopen");
@@ -51,9 +69,84 @@ openfile(char *f)
 void
 closefile()
 {
-    if (fclose(file) != 0)
+    if (fclose(file) != 0) perror("fclose");
+    file = NULL;
+}
+
+void
+print_token(const struct Token *tk)
+{
+    char *p;
+    switch (tk->kind)
     {
-        perror("fclose");
+    case IDENT:      p = "IDENT";      break;
+    case KEYWORD:    p = "KEYWORD";    break;
+    case DECIMAL:    p = "DECIMAL";    break;
+    case OCTAL:      p = "OCTAL";      break;
+    case HEXA:       p = "HEXA";       break;
+    case FLOAT:      p = "FLOAT";      break;
+    case HEXAFLOAT:  p = "HEXAFLOAT";  break;
+    case STRING:     p = "STRING";     break;
+    case CHAR:       p = "CHAR";       break;
+    case PUNCTUATOR: p = "PUNCTUATOR"; break;
+    case ENDFILE:    p = "ENDFILE";    break;
+    default:         p = "UNKNOWN";    break;
+    }
+    printf("Type:%s (%d:%d)%s\n", p, tk->row, tk->col,
+            tk->kind == PUNCTUATOR ? punctuator_tostring(tk->id) : tk->val);
+}
+
+static char *
+punctuator_tostring(enum PnctID p)
+{
+    switch (p)
+    {
+    case PSQR_BRCK_L:   return "[";
+    case PSQR_BRCK_R:   return "]";
+    case PPAREN_L:      return "(";
+    case PPAREN_R:      return ")";
+    case PCRL_BRCK_L:   return "{";
+    case PCRL_BRCK_R:   return "}";
+    case PDOT:          return ".";
+    case PARRW:         return "->";
+    case PPLUS_PLUS:    return "++";
+    case PMINS_MINS:    return "--";
+    case PAMPD:         return "&";
+    case PMULT:         return "*";
+    case PPLUS:         return "+";
+    case PMINS:         return "-";
+    case PTILDE:        return "~";
+    case PEXCM:         return "!";
+    case PDIV:          return "/";
+    case PMOD:          return "%";
+    case PSHIFT_L:      return "<<";
+    case PSHIFT_R:      return ">>";
+    case PLESS:         return "<";
+    case PGRT:          return ">";
+    case PLESS_EQ:      return "<=";
+    case PGRT_EQ:       return ">=";
+    case PEQ:           return "==";
+    case PNEQ:          return "!=";
+    case PCARET:        return "^";
+    case PVBAR:         return "|";
+    case PAMPD_AMPD:    return "&&";
+    case PVBAR_VBAR:    return "||";
+    case PQMARK:        return "?";
+    case PCOLON:        return ":";
+    case PSCOLON:       return ";";
+    case PTLEAD:        return "...";
+    case PASGN:         return "=";
+    case PASGN_MULT:    return "*=";
+    case PASGN_DIV:     return "/=";
+    case PASGN_MOD:     return "%=";
+    case PASGN_PLUS:    return "+=";
+    case PASGN_MINS:    return "-=";
+    case PASGN_SHIFT_L: return "<<=";
+    case PASGN_SHIFT_R: return ">>=";
+    case PASGN_AMPD:    return "&=";
+    case PASGN_CARET:   return "^=";
+    case PASGN_VBAR:    return "|=";
+    default:            return "UNKNOWN";
     }
 }
 
@@ -64,6 +157,13 @@ nexttoken(struct Token *token)
     skip();
     c = nextchar();
 
+    token->kind = INVALID;
+    token->id = PINVALID;
+    token->row = line;
+    token->col = column;
+    token->val = NULL;
+
+
     if (is_nondigit(c))
     {
         return make_ident(token, c);
@@ -72,24 +172,77 @@ nexttoken(struct Token *token)
     {
         return make_digit(token, c);
     }
+    else if (c == '"')
+    {
+        return make_string_literal(token);
+    }
+    else if (c == '\'')
+    {
+        char *p = (char*)malloc(sizeof(char)*8);
+        token->kind = CHAR;
+        token->row = line;
+        token->col = column-1;
+        token->val = p;
+        c = nextchar();
+        if (c == '\\')
+        {
+            if (is_simple_escape())
+            {
+                *p++ = '\\';
+                *p++ = nextchar();
+            }
+            else
+            {
+                //error
+            }
+        }
+        else
+        {
+            *p++ = c;
+        }
+        return estimate('\'');
+    }
     else if (c == '.')
     {
         c = nextchar();
         if (is_digit(c, 10))
         {
-            pushback(c);
             char *p = (char*)malloc(sizeof(char)*IDENT_MAXSIZE);
+            pushback(c);
             token->kind = FLOAT;
             token->row = line;
-            token->col = column;
+            token->col = column-1;
             token->val = p;
             return make_float_base('.', 10, p);
         }
+        else
+        {
+            pushback(c);
+        }
     }
-    else if (c == '"')
+    else if (c == EOF)
     {
-        return make_string_literal(token);
+        return make_endfile(token);
     }
+
+    if (make_punctuator(token, c))
+    {
+        return 1;
+    }
+    else
+    {
+        pushback(c);
+    }
+    return 0;
+}
+
+static int
+make_endfile(struct Token *tk)
+{
+    tk->kind = ENDFILE;
+    tk->row = line;
+    tk->col = column;
+    tk->val = "";
     return 0;
 }
 
@@ -108,6 +261,7 @@ make_ident(struct Token *tk, int c)
     }
     ident[len] = 0;
     pushback(c);
+    set_keyword(tk);
     return 1;
 }
 
@@ -153,33 +307,21 @@ make_digit_base(struct Token *tk, int c, int base, char *p)
     if (c == '.' || c == 'e' || c == 'E' || c == 'p' || c == 'P')
     {
         tk->kind = (base == 16) ? HEXAFLOAT : FLOAT;
-        return make_float_base(c, base == 16 ? 16 : 10, p+len);
+        return make_float_base(c, (base == 16) ? 16 : 10, p+len);
     }
 
-    if (c == 'u' || c == 'U')
+    if (c == 'u' || c == 'U' || c == 'l' || c == 'L')
     {
+        int d = nextchar();
         p[len++] = c;
-        c = nextchar();
-        if (c == 'l' || c == 'L')
+        if (((c == 'u' || c == 'U') && (d == 'l' || d == 'L')) ||
+            ((c == 'l' || c == 'L') && (d == 'u' || d == 'U')))
         {
-            p[len++] = c;
+            p[len++] = d;
         }
         else
         {
-            pushback(c);
-        }
-    }
-    else if (c == 'l' || c == 'L')
-    {
-        p[len++] = c;
-        c = nextchar();
-        if (c == 'u' || c == 'U')
-        {
-            p[len++] = c;
-        }
-        else
-        {
-            pushback(c);
+            pushback(d);
         }
     }
     else
@@ -280,6 +422,7 @@ make_string_literal(struct Token *tk)
             {
                 str = (char*)realloc(str, sizeof(char)*(size+IDENT_MAXSIZE));
             }
+
             if (c == '\\' && is_simple_escape())
             {
                 str[len++] = '\\';
@@ -294,17 +437,180 @@ make_string_literal(struct Token *tk)
 }
 
 static int
+make_punctuator(struct Token *tk, int c)
+{
+    tk->id = PINVALID;
+    tk->row = line;
+    tk->col = column;
+    tk->val = NULL;
+    switch (c)
+    {
+    case '[':
+        tk->id = PSQR_BRCK_L; break;
+    case ']':
+        tk->id = PSQR_BRCK_R; break;
+    case '(':
+        tk->id = PPAREN_L; break;
+    case ')':
+        tk->id = PPAREN_R; break;
+    case '{':
+        tk->id = PCRL_BRCK_L; break;
+    case '}':
+        tk->id = PCRL_BRCK_R; break;
+    case '.':
+        if (estimate('.'))
+        {
+            if (estimate('.'))
+            {
+                tk->id = PTLEAD;
+            }
+            else
+            {
+                // error
+            }
+        }
+        else
+        {
+            tk->id = PDOT;
+        }
+        break;
+    case '-':
+        c = nextchar();
+        if (c == '>')      tk->id = PARRW;
+        else if (c == '-') tk->id = PMINS_MINS;
+        else if (c == '=') tk->id = PASGN_MINS;
+        else
+        {
+            tk->id = PMINS;
+            pushback(c);
+        }
+        break;
+    case '+':
+        c = nextchar();
+        if (c == '+')      tk->id = PPLUS_PLUS;
+        else if (c == '=') tk->id = PASGN_PLUS;
+        else
+        {
+            tk->id = PPLUS;
+            pushback(c);
+        }
+        break;
+    case '&':
+        c = nextchar();
+        if (c == '&')      tk->id = PAMPD_AMPD;
+        else if (c == '=') tk->id = PASGN_AMPD;
+        else
+        {
+            tk->id = PAMPD;
+            pushback(c);
+        }
+        break;
+    case '*':
+        tk->id = estimate('=') ? PASGN_MULT : PMULT;
+        break;
+    case '~':
+        tk->id = PTILDE; break;
+    case '!':
+        tk->id = estimate('=') ? PNEQ : PEXCM;
+        break;
+    case '/':
+        tk->id = estimate('=') ? PASGN_DIV : PDIV;
+        break;
+    case '%':
+        tk->id = estimate('=') ? PASGN_MOD : PMOD;
+        break;
+    case '<':
+        c = nextchar();
+        if (c == '<')
+        {
+            tk->id = estimate('=') ? PASGN_SHIFT_L : PSHIFT_L;
+        }
+        else if (c == '=')
+        {
+            tk->id = PLESS_EQ;
+        }
+        else
+        {
+            tk->id = PLESS;
+            pushback(c);
+        }
+        break;
+    case '>':
+        c = nextchar();
+        if (c == '>')
+        {
+            tk->id = estimate('=') ? PASGN_SHIFT_R : PSHIFT_R;
+        }
+        else if (c == '=')
+        {
+            tk->id = PGRT_EQ;
+        }
+        else
+        {
+            tk->id = PGRT;
+            pushback(c);
+        }
+        break;
+    case '=':
+        tk->id = estimate('=') ? PEQ : PASGN;
+        break;
+    case '^':
+        tk->id = estimate('=') ? PASGN_CARET : PCARET;
+        break;
+    case '|':
+        c = nextchar();
+        if (c == '|')
+        {
+            tk->id = PVBAR_VBAR;
+        }
+        else if (c == '=')
+        {
+            tk->id = PASGN_VBAR;
+        }
+        else
+        {
+            tk->id = PVBAR;
+        }
+        break;
+    case '?':
+        tk->id = PQMARK;
+        break;
+    case ':':
+        tk->id = PCOLON;
+        break;
+    case ';':
+        tk->id = PSCOLON;
+        break;
+    }
+
+    if (tk->id != PINVALID)
+    {
+        tk->kind = PUNCTUATOR;
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+static int
+estimate(int x)
+{
+    int c = nextchar();
+    if (x == c) return 1; else pushback(c);
+    return 0;
+}
+
+static int
 is_simple_escape()
 {
     int c = nextchar();
     switch (c)
     {
-    case '\'': case '"':
-    case '?':  case '\\':
-    case 'a':  case 'b':
-    case 'f':  case 'n':
-    case 'r':  case 't':
-    case 'v':
+    case '\'': case '"': case '?':  case '\\':
+    case 'a':  case 'b': case 'f':  case 'n':
+    case 'r':  case 't': case 'v':
         pushback(c);
         return 1;
     default:
@@ -339,18 +645,29 @@ is_digit(int c, int base)
 }
 
 static int
-is_nonzerodigit(int c, int base) { return is_digit(c, base) && c != '0'; }
-
-static int
-is_space(int c) { return c == ' ' || c == '\t'; }
+is_space(int c) { return c == ' ' || c == '\t' || c == '\v'; }
 
 static int
 is_return(int c) { return c == '\n' || c == '\r'; }
 
 static void
+set_keyword(struct Token *tk)
+{
+    int i;
+    for (i = 0; keywords[i] != 0; i++)
+    {
+        if (strcmp(keywords[i], tk->val) == 0)
+        {
+            tk->kind = KEYWORD;
+            return;
+        }
+    }
+}
+
+static void
 skip()
 {
-    int c, d;
+    int c;
     for (;;)
     {
         c = nextchar();
@@ -360,30 +677,22 @@ skip()
         }
         else if (c == '/')
         {
-            if ((d = nextchar()) == '*')
+            if (estimate('*'))
             {
                 for (;;)
                 {
                     if ((c = nextchar()) == '*')
                     {
-                        if ((d = nextchar()) == '/')
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            pushback(d);
-                        }
+                        if (estimate('/')) break;
                     }
                 }
             }
-            else if (d == '/')
+            else if (estimate('/'))
             {
                 for (; !is_return(c); c = nextchar());
             }
             else
             {
-                pushback(d);
                 pushback(c);
                 return;
             }
@@ -417,8 +726,15 @@ nextchar()
         return stack[--sp];
     }
     
-    c = fgetc(file);
-    if (c == '\n')
+    c = (file == NULL) ? EOF : fgetc(file);
+    if (c == EOF)
+    {
+        if (autoclose)
+        {
+            closefile();
+        }
+    }
+    else if (c == '\n')
     {
         line++;
         column = 0;
@@ -430,7 +746,7 @@ nextchar()
     return c;
 }
 
-#ifdef TEST
+#ifdef TEST_LEX
 int
 main(int argc, char *argv[])
 {
@@ -441,12 +757,11 @@ main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    openfile(argv[1]);
+    openfile(argv[1], 1);
     for (; nexttoken(&token) != 0;)
     {
-        printf("%d:%d:%s\n", token.row, token.col, token.val);
+        print_token(&token);
     }
-    closefile();
 }
 #endif
 
