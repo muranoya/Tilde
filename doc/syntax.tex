@@ -1,4 +1,4 @@
-\documentclass[11pt]{jreport}
+\documentclass[12pt]{report}
 \usepackage{fancyvrb}
 
 \def\|{\verb|}
@@ -6,6 +6,28 @@
 
 \begin{document}
 \chapter{Lexical grammar}
+\rm
+\section{Lexical elements}
+\it
+\noindent
+token:\\
+\|    | keyword\\
+\|    | identifier\\
+\|    | constatn\\
+\|    | string-literal\\
+\|    | punctuator\\
+
+\rm
+\section{Keywords}
+\it
+\noindent
+keywords: {\rm one of}\\
+\|    | \verb+enum unsigned break return void case float+ \\
+\|    | \verb+short char for signed while const goto sizeof+ \\
+\|    | \verb+bool continue if static default struct do+ \\
+\|    | \verb+int switch double long typedef else union inline extern+ \\
+
+\rm
 \section{Identifiers}
 \it
 \noindent
@@ -138,7 +160,7 @@ hexadecimal-digit-sequence:\\
 
 \noindent
 floating-suffix: {\rm one of}\\
-\|    | \verb+f F+\\
+\|    | \verb+f F l L+\\
 
 \noindent
 enumeration-constant:\\
@@ -155,12 +177,12 @@ c-char-sequence:\\
 
 \noindent
 c-char:\\
-\|    | any member of the source character set except the single-quote ', backslash $\backslash$, or new-line character\\
+\|    | {\rm any member of the source character set except the single-quote ', backslash $\backslash$, or new-line character}\\
 \|    | escape-sequence\\
 
 \noindent
 escape-sequence:\\
-\|    | \verb+\' \" \? \\ \b \f \n \r \t \v+\\
+\|    | \verb+\' \" \? \\ \a \b \f \n \r \t \v+\\
 
 \rm
 \section{String literals}
@@ -176,7 +198,7 @@ s-char-sequence:\\
 
 \noindent
 s-char:\\
-\|    | any member of the source character set except the double-quote ", backslash $\backslash$, or new-line character\\
+\|    | {\rm any member of the source character set except the double-quote ", backslash $\backslash$, or new-line character}\\
 \|    | escape-sequence\\
 
 \rm
@@ -184,7 +206,7 @@ s-char:\\
 \it
 \noindent
 punctuator: {\rm one of}\\
-\|    | \verb+[ ] ( ) { } .+\\
+\|    | \verb+[ ] ( ) { } . ->+\\
 \|    | \verb|++ -- & * + - ~ !|\\
 \|    | \verb+/ % << >> < > <= >= == != ^ | && ||+\\
 \|    | \verb+? : ; ...+\\
@@ -208,6 +230,7 @@ postfix-expression:\\
 \|    | postfix-expression \verb+[+ expression \verb+]+\\
 \|    | postfix-expression \verb+(+ argument-expression-list\opt \verb+)+\\
 \|    | postfix-expression \verb+.+ identifier\\
+\|    | postfix-expression \verb+->+ identifier\\
 \|    | postfix-expression \verb|++|\\
 \|    | postfix-expression \verb+--+\\
 \|    | \verb+(+ type-name \verb+)+ \verb+{+ initializer-list \verb+}+\\
@@ -323,10 +346,11 @@ constant-expression:\\
 \it
 \noindent
 declaration:\\
-\|    | declaration-specifiers init-declarator-list\opt \verb+;+
+\|    | declaration-specifiers init-declarator-list\opt \verb+;+\\
 
 \noindent
 declaration-specifiers:\\
+\|    | storage-class-specifier declaration-specifiers\opt\\
 \|    | type-specifier declaration-specifiers\opt\\
 \|    | type-qualifier declaration-specifiers\opt\\
 \|    | function-specifier declaration-specifiers\opt\\
@@ -342,6 +366,12 @@ init-declarator:\\
 \|    | declarator \verb+=+ initializer\\
 
 \noindent
+storage-class-specifier:\\
+\|    | \verb+typedef+\\
+\|    | \verb+extern+\\
+\|    | \verb+static+\\
+
+\noindent
 type-specifier:\\
 \|    | \verb+void+\\
 \|    | \verb+char+\\
@@ -355,10 +385,12 @@ type-specifier:\\
 \|    | \verb+bool+\\
 \|    | struct-or-union-specifier\\
 \|    | enum-specifier\\
+\|    | typedef-name\\
 
 \noindent
 struct-or-union-specifier:\\
 \|    | struct-or-union identifier \verb+{+ struct-declaration-list \verb+}+\\
+\|    | struct-or-union identifier\\
 
 \noindent
 struct-or-union:\\
@@ -372,7 +404,7 @@ struct-declaration-list:\\
 
 \noindent
 struct-declaration:\\
-\|    | specifier-qualifier-list struct-declarator-list \verb+;+
+\|    | specifier-qualifier-list struct-declarator-list \verb+;+\\
 
 \noindent
 specifier-qualifier-list:\\
@@ -388,7 +420,174 @@ struct-declarator-list:\\
 struct-declarator:\\
 \|    | declarator\\
 
+\noindent
+enum-specifier:\\
+\|    | \verb+enum+ identifier \verb+{+ enumerator-list \verb+}+\\
+\|    | \verb+enum+ identifier \verb+{+ enumerator-list \verb+,+ \verb+}+\\
+\|    | \verb+enum+ identifier\\
 
+\noindent
+enumerator-list:\\
+\|    | enumerator\\
+\|    | enumerator-list \verb+,+ enumerator\\
+
+\noindent
+enumerator:\\
+\|    | enumeration-constant\\
+\|    | enumeration-constant \verb+=+ constant-expression\\
+
+\noindent
+type-qualifier:\\
+\|    | \verb+const+\\
+
+\noindent
+function-specifier:\\
+\|    | \verb+inline+\\
+
+\noindent
+declarator:\\
+\|    | pointer\opt direct-declarator\\
+
+\noindent
+direct-declarator:\\
+\|    | identifier\\
+\|    | \verb+(+ declarator \verb+)+\\
+\|    | direct-declarator \verb+[+ type-qualifier-list\opt assignment-expression\opt \verb+]+\\
+\|    | direct-declarator \verb+[+ \verb+static+ type-qualifier-list\opt assignment-expression \verb+]+\\
+\|    | direct-declarator \verb+[+ type-qualifier-list \verb+static+ assignment-expression \verb+]+\\
+\|    | direct-declarator \verb+[+ type-qualifier-list\opt \verb+*+ \verb+]+\\
+\|    | direct-declarator \verb+(+ perameter-type-list \verb+)+\\
+\|    | direct-declarator \verb+(+ identifier-list\opt \verb+)+\\
+
+\noindent
+pointer:\\
+\|    | \verb+*+ type-qualifier-list\opt\\
+\|    | \verb+*+ type-qualifier-list\opt pointer\\
+
+\noindent
+type-qualifier-list:\\
+\|    | type-qualifier\\
+\|    | type-qualifier-list type-qualifier\\
+
+\noindent
+parameter-type-list:\\
+\|    | parameter-list\\
+\|    | parameter-list \verb+,+ \verb+...+\\
+
+\noindent
+parameter-list:\\
+\|    | parameter-declaration\\
+\|    | parameter-list \verb+,+ parameter-declaration\\
+
+\noindent
+parameter-declaration:\\
+\|    | declaration-specifiers declarator\\
+\|    | declaration-specifiers abstract-declarator\opt\\
+
+\noindent
+identifier-list:\\
+\|    | identifier\\
+\|    | identifier-list \verb+,+ identifier\\
+
+\noindent
+type-name:\\
+\|    | specifier-qualifier-list abstract-declarator\opt\\
+
+\noindent
+abstract-declarator:\\
+\|    | pointer\\
+\|    | pointer\opt direct-abstract-declarator\\
+
+\noindent
+direct-abstract-declarator:\\
+\|    | \verb+(+ abstract-declarator \verb+)+\\
+\|    | direct-abstract-declarator\opt \verb+[+ assignment-expression\opt \verb+]+\\
+\|    | direct-abstract-declarator\opt \verb+[+ \verb+*+ \verb+]+\\
+\|    | direct-abstract-declarator\opt \verb+(+ parameter-type-list\opt \verb+)+\\
+
+\noindent
+typedef-name:\\
+\|    | identifier\\
+
+\noindent
+initializer:\\
+\|    | assignment-expression\\
+\|    | \verb+{+ initializer-list \verb+}+\\
+\|    | \verb+{+ initializer-list \verb+,+ \verb+}+\\
+
+\noindent
+initializer-list:\\
+\|    | designation\opt initializer\\
+\|    | initializer-list \verb+,+ designation\opt initializer\\
+
+\noindent
+designation:\\
+\|    | designator-list \verb+=+\\
+
+\noindent
+designator-list:\\
+\|    | designator\\
+\|    | designator-list designator\\
+
+\noindent
+designator:\\
+\|    | \verb+[+ constant-expression \verb+]+\\
+\|    | \verb+.+ identifier\\
+
+\rm
+\section{Statements}
+\it
+\noindent
+statement:\\
+\|    | labeled-statement\\
+\|    | compound-statement\\
+\|    | expression-statement\\
+\|    | selection-statement\\
+\|    | iteration-statement\\
+\|    | jump-statement\\
+
+\noindent
+labeled-statement:\\
+\|    | identifier \verb+:+ statement\\
+\|    | \verb+case+ constant-expression \verb+:+ statement\\
+\|    | \verb+default+ \verb+:+ statement\\
+
+\noindent
+compound-statement:\\
+\|    | \verb+{+ block-item-list\opt \verb+}+\\
+
+\noindent
+block-item-list:\\
+\|    | block-item\\
+\|    | block-item-list block-item\\
+
+\noindent
+block-item:\\
+\|    | declaration\\
+\|    | statement\\
+
+\noindent
+expression-statement:\\
+\|    | expression\opt \verb+;+\\
+
+\noindent
+selection-statement:\\
+\|    | \verb+if+ \verb+(+ expression \verb+)+ statement\\
+\|    | \verb+if+ \verb+(+ expression \verb+)+ statement \verb+else+ statement\\
+\|    | \verb+switch+ \verb+(+ expression \verb+)+ statement\\
+
+\noindent
+iteration-statement:\\
+\|    | \verb+while+ \verb+(+ expression \verb+)+ statement\\
+\|    | \verb+do+ statement \verb+while+ \verb+(+ expression \verb+)+ \verb+;+\\
+\|    | \verb+for+ \verb+(+ expression\opt \verb+;+ expression\opt \verb+;+ expression\opt \verb+)+ statement\\
+
+\noindent
+jump-statement:\\
+\|    | \verb+goto+ identifier \verb+;+\\
+\|    | \verb+continue+ \verb+;+\\
+\|    | \verb+break+ \verb+;+\\
+\|    | \verb+return+ expression\opt \verb+;+\\
 
 \end{document}
 
