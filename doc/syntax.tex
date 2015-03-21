@@ -13,7 +13,7 @@
 token:\\
 \|    | keyword\\
 \|    | identifier\\
-\|    | constatn\\
+\|    | constant\\
 \|    | string-literal\\
 \|    | punctuator\\
 
@@ -209,7 +209,7 @@ punctuator: {\rm one of}\\
 \|    | \verb+[ ] ( ) { } . ->+\\
 \|    | \verb|++ -- & * + - ~ !|\\
 \|    | \verb+/ % << >> < > <= >= == != ^ | && ||+\\
-\|    | \verb+? : ; ...+\\
+\|    | \verb+? : ; ... ,+\\
 \|    | \verb#= *= /= %= += -= <<= >>= &= ^= |=#\\
 
 \rm
@@ -335,7 +335,6 @@ assignment-operator: {\rm one of}\\
 \noindent
 expression:\\
 \|    | assignment-expression\\
-\|    | expression \verb+,+ assignment-expression\\
 
 \noindent
 constant-expression:\\
