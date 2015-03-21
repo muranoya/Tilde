@@ -588,5 +588,27 @@ jump-statement:\\
 \|    | \verb+break+ \verb+;+\\
 \|    | \verb+return+ expression\opt \verb+;+\\
 
+\rm
+\section{External definitions}
+\it
+\noindent
+translation-unit:\\
+\|    | external-declaration\\
+\|    | translation-unit external-declaration\\
+
+\noindent
+external-declaration:\\
+\|    | function-definition\\
+\|    | declaration\\
+
+\noindent
+function-definition:\\
+\|    | declaration-specifiers declarator declaration-list\opt compound-statement\\
+
+\noindent
+declaration-list:\\
+\|    | declaration\\
+\|    | declaration-list declaration\\
+
 \end{document}
 
