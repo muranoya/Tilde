@@ -60,9 +60,10 @@ struct Token
 };
 
 // lex.c
-int  openfile(const char *f, int ac);
-void closefile();
-void print_token(const struct Token *tk);
-char *print_punctuator(enum PnctID p);
-int  nexttoken(struct Token *token);
+int  openFile(const char *f, int ac);
+void closeFile();
+void printToken(const struct Token *tk);
+char *punctuatorToString(enum PnctID p);
+int  nextToken(struct Token *token);
+struct Token *nextToken2();
 #endif

@@ -28,8 +28,6 @@ static char *keywords[] = {
 };
 
 /* prototype */
-static char *punctuator_tostring(enum PnctID p);
-
 static int  make_endfile(struct Token *tk);
 static int  make_ident(struct Token *tk, int c);
 static int  make_digit(struct Token *tk, int c);
@@ -51,7 +49,7 @@ static void pushback(int c);
 static int  nextchar();
 
 int
-openfile(const char *f, int ac)
+openFile(const char *f, int ac)
 {
     file = fopen(f, "r");
     autoclose = ac;
@@ -67,14 +65,14 @@ openfile(const char *f, int ac)
 }
 
 void
-closefile()
+closeFile()
 {
     if (fclose(file) != 0) perror("fclose");
     file = NULL;
 }
 
 void
-print_token(const struct Token *tk)
+printToken(const struct Token *tk)
 {
     char *p;
     switch (tk->kind)
@@ -99,11 +97,11 @@ print_token(const struct Token *tk)
     default:               p = "UNKNOWN";    break;
     }
     printf("%s (%d:%d)%s\n", p, tk->row, tk->col,
-            tk->kind == TK_PUNCTUATOR ? punctuator_tostring(tk->id) : tk->str);
+            tk->kind == TK_PUNCTUATOR ? punctuatorToString(tk->id) : tk->str);
 }
 
-static char *
-punctuator_tostring(enum PnctID p)
+char *
+punctuatorToString(enum PnctID p)
 {
     switch (p)
     {
@@ -157,8 +155,15 @@ punctuator_tostring(enum PnctID p)
     }
 }
 
+struct Token *nextToken2()
+{
+    struct Token *tk = (struct Token*)malloc(sizeof(struct Token));
+    nextToken(tk);
+    return tk;
+}
+
 int
-nexttoken(struct Token *token)
+nextToken(struct Token *token)
 {
     int c;
     skip();
@@ -744,7 +749,7 @@ nextchar()
     {
         if (autoclose)
         {
-            closefile();
+            closeFile();
         }
     }
     else if (c == '\n')
@@ -770,10 +775,10 @@ main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    openfile(argv[1], 1);
-    for (; nexttoken(&token) != 0;)
+    openFile(argv[1], 1);
+    for (; nextToken(&token) != 0;)
     {
-        print_token(&token);
+        printToken(&token);
     }
     return 0;
 }
