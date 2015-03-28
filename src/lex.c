@@ -7,7 +7,7 @@
 #define IDENT_MAXSIZE (256)
 #define STACK_SIZE (8)
 
-#define TEST_LEX
+//#define TEST_LEX
 
 static FILE *file = NULL;
 static int autoclose;
@@ -79,21 +79,27 @@ print_token(const struct Token *tk)
     char *p;
     switch (tk->kind)
     {
-    case IDENT:      p = "IDENT";      break;
-    case KEYWORD:    p = "KEYWORD";    break;
-    case DECIMAL:    p = "DECIMAL";    break;
-    case OCTAL:      p = "OCTAL";      break;
-    case HEXA:       p = "HEXA";       break;
-    case FLOAT:      p = "FLOAT";      break;
-    case HEXAFLOAT:  p = "HEXAFLOAT";  break;
-    case STRING:     p = "STRING";     break;
-    case CHAR:       p = "CHAR";       break;
-    case PUNCTUATOR: p = "PUNCTUATOR"; break;
-    case ENDFILE:    p = "ENDFILE";    break;
-    default:         p = "UNKNOWN";    break;
+    case TK_IDENT:         p = "IDENT";      break;
+    case TK_KEYWORD:       p = "KEYWORD";    break;
+    case TK_CONSTANT:
+        switch (tk->ckind)
+        {
+        case CK_CHAR:      p = "CONSTANT(CHAR)";       break;
+        case CK_DECIMAL:   p = "CONSTANT(DECIMAL)";    break;
+        case CK_OCTAL:     p = "CONSTANT(OCTAL)";      break;
+        case CK_HEXA:      p = "CONSTANT(HEXA)";       break;
+        case CK_FLOAT:     p = "CONSTANT(FLOAT)";      break;
+        case CK_HEXAFLOAT: p = "CONSTANT(HEXA_FLOAT)"; break;
+        case CK_INVALID:   p = "CONSTANT(INVALID)";    break;
+        }
+        break;
+    case TK_STRING:        p = "STRING";     break;
+    case TK_PUNCTUATOR:    p = "PUNCTUATOR"; break;
+    case TK_ENDFILE:       p = "ENDFILE";    break;
+    default:               p = "UNKNOWN";    break;
     }
-    printf("Type:%s (%d:%d)%s\n", p, tk->row, tk->col,
-            tk->kind == PUNCTUATOR ? punctuator_tostring(tk->id) : tk->val);
+    printf("%s (%d:%d)%s\n", p, tk->row, tk->col,
+            tk->kind == TK_PUNCTUATOR ? punctuator_tostring(tk->id) : tk->str);
 }
 
 static char *
@@ -135,6 +141,7 @@ punctuator_tostring(enum PnctID p)
     case PCOLON:        return ":";
     case PSCOLON:       return ";";
     case PTLEAD:        return "...";
+    case PCOMMA:        return ",";
     case PASGN:         return "=";
     case PASGN_MULT:    return "*=";
     case PASGN_DIV:     return "/=";
@@ -157,11 +164,12 @@ nexttoken(struct Token *token)
     skip();
     c = nextchar();
 
-    token->kind = INVALID;
+    token->kind = TK_INVALID;
     token->id = PINVALID;
+    token->ckind = CK_INVALID;
     token->row = line;
     token->col = column;
-    token->val = NULL;
+    token->str = NULL;
 
 
     if (is_nondigit(c))
@@ -179,10 +187,11 @@ nexttoken(struct Token *token)
     else if (c == '\'')
     {
         char *p = (char*)malloc(sizeof(char)*8);
-        token->kind = CHAR;
+        token->kind = TK_CONSTANT;
+        token->ckind = CK_CHAR;
         token->row = line;
         token->col = column-1;
-        token->val = p;
+        token->str = p;
         c = nextchar();
         if (c == '\\')
         {
@@ -209,10 +218,11 @@ nexttoken(struct Token *token)
         {
             char *p = (char*)malloc(sizeof(char)*IDENT_MAXSIZE);
             pushback(c);
-            token->kind = FLOAT;
+            token->kind = TK_CONSTANT;
+            token->ckind = CK_FLOAT;
             token->row = line;
             token->col = column-1;
-            token->val = p;
+            token->str = p;
             return make_float_base('.', 10, p);
         }
         else
@@ -239,10 +249,10 @@ nexttoken(struct Token *token)
 static int
 make_endfile(struct Token *tk)
 {
-    tk->kind = ENDFILE;
+    tk->kind = TK_ENDFILE;
     tk->row = line;
     tk->col = column;
-    tk->val = "";
+    tk->str = "";
     return 0;
 }
 
@@ -251,10 +261,10 @@ make_ident(struct Token *tk, int c)
 {
     char *ident = (char*)malloc(sizeof(char) * IDENT_MAXSIZE);
     int len = 0;
-    tk->kind = IDENT;
+    tk->kind = TK_IDENT;
     tk->row = line;
     tk->col = column;
-    tk->val = ident;
+    tk->str = ident;
     for (; is_nondigit(c) || is_digit(c, 10); c = nextchar())
     {
         ident[len++] = c;
@@ -270,26 +280,27 @@ make_digit(struct Token *tk, int c)
 {
     char *val = (char*)malloc(sizeof(char)*IDENT_MAXSIZE);
     int ret;
+    tk->kind = TK_CONSTANT;
     tk->row = line;
     tk->col = column;
-    tk->val = val;
+    tk->str = val;
     if (c == '0')
     {
         c = nextchar();
         if (c == 'x' || c == 'X')
         {
-            tk->kind = HEXA;
+            tk->ckind = CK_HEXA;
             ret = make_digit_base(tk, nextchar(), 16, val);
         }
         else
         {
-            tk->kind = OCTAL;
+            tk->ckind = CK_OCTAL;
             ret = make_digit_base(tk, c, 8, val);
         }
     }
     else
     {
-        tk->kind = DECIMAL;
+        tk->ckind = CK_DECIMAL;
         ret = make_digit_base(tk, c, 10, val);
     }
     return ret;
@@ -306,7 +317,7 @@ make_digit_base(struct Token *tk, int c, int base, char *p)
 
     if (c == '.' || c == 'e' || c == 'E' || c == 'p' || c == 'P')
     {
-        tk->kind = (base == 16) ? HEXAFLOAT : FLOAT;
+        tk->ckind = (base == 16) ? CK_HEXAFLOAT : CK_FLOAT;
         return make_float_base(c, (base == 16) ? 16 : 10, p+len);
     }
 
@@ -400,10 +411,10 @@ make_string_literal(struct Token *tk)
     int size = IDENT_MAXSIZE;
     int c;
     int len = 0;
+    tk->kind = TK_STRING;
     tk->row = line;
     tk->col = column;
-    tk->val = str;
-    tk->kind = STRING;
+    tk->str = str;
     for (;;)
     {
         c = nextchar();
@@ -442,7 +453,7 @@ make_punctuator(struct Token *tk, int c)
     tk->id = PINVALID;
     tk->row = line;
     tk->col = column;
-    tk->val = NULL;
+    tk->str = NULL;
     switch (c)
     {
     case '[':
@@ -474,6 +485,8 @@ make_punctuator(struct Token *tk, int c)
             tk->id = PDOT;
         }
         break;
+    case ',':
+        tk->id = PCOMMA; break;
     case '-':
         c = nextchar();
         if (c == '>')      tk->id = PARRW;
@@ -585,7 +598,7 @@ make_punctuator(struct Token *tk, int c)
 
     if (tk->id != PINVALID)
     {
-        tk->kind = PUNCTUATOR;
+        tk->kind = TK_PUNCTUATOR;
         return 1;
     }
     else
@@ -656,9 +669,9 @@ set_keyword(struct Token *tk)
     int i;
     for (i = 0; keywords[i] != 0; i++)
     {
-        if (strcmp(keywords[i], tk->val) == 0)
+        if (strcmp(keywords[i], tk->str) == 0)
         {
-            tk->kind = KEYWORD;
+            tk->kind = TK_KEYWORD;
             return;
         }
     }
@@ -762,6 +775,7 @@ main(int argc, char *argv[])
     {
         print_token(&token);
     }
+    return 0;
 }
 #endif
 

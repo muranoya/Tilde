@@ -3,15 +3,24 @@
 
 enum TokenKind
 {
-    IDENT,
-    KEYWORD,
-    DECIMAL, OCTAL, HEXA,
-    FLOAT, HEXAFLOAT,
-    STRING,
-    CHAR,
-    PUNCTUATOR,
-    ENDFILE,
-    INVALID,
+    TK_KEYWORD,
+    TK_IDENT,
+    TK_CONSTANT,
+    TK_STRING,
+    TK_PUNCTUATOR,
+    TK_ENDFILE,
+    TK_INVALID,
+};
+
+enum ConstKind
+{
+    CK_CHAR,
+    CK_DECIMAL,
+    CK_OCTAL,
+    CK_HEXA,
+    CK_FLOAT,
+    CK_HEXAFLOAT,
+    CK_INVALID,
 };
 
 enum PnctID
@@ -30,7 +39,7 @@ enum PnctID
     PLESS, PGRT, PLESS_EQ, PGRT_EQ,
     PEQ, PNEQ, PCARET, PVBAR,
     PAMPD_AMPD, PVBAR_VBAR,
-    PQMARK, PCOLON, PSCOLON, PTLEAD,
+    PQMARK, PCOLON, PSCOLON, PTLEAD, PCOMMA,
 
     PASGN, PASGN_MULT, PASGN_DIV,
     PASGN_MOD, PASGN_PLUS, PASGN_MINS,
@@ -44,7 +53,8 @@ struct Token
 {
     enum TokenKind kind;
     enum PnctID id;
-    char *val;
+    enum ConstKind ckind;
+    char *str;
     int row;
     int col;
 };
