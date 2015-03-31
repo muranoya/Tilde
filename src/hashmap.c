@@ -4,18 +4,32 @@
 
 #include "hashmap.h"
 
+struct container
+{
+    char *key;
+    void *data;
+    struct container *next;
+};
+
+struct list
+{
+    struct container *head;
+    struct container *tail;
+    int len;
+};
+
 static unsigned int calc_hash(unsigned int size, const char *key);
-static void free_list(struct List *list);
+static void free_list(struct list *list, void (*)(void*));
 
 struct Hashmap *
 init_hashmap(unsigned int size)
 {
     struct Hashmap *hmap;
-    struct List *list;
+    struct list *list;
     int i;
 
     hmap = (struct Hashmap*)malloc(sizeof(struct Hashmap));
-    hmap->list = (struct List*)malloc(sizeof(struct List)*size);
+    hmap->list = (struct list*)malloc(sizeof(struct list)*size);
     hmap->size = size;
 
     for (i = 0; i < size; ++i)
@@ -28,68 +42,69 @@ init_hashmap(unsigned int size)
 }
 
 void
-fin_hashmap(struct Hashmap *hmap)
+free_hashmap(struct Hashmap *hmap, void (*liberator)(void*))
 {
     int i;
     for (i = 0; i < hmap->size; ++i)
     {
-        free_list(hmap->list+i);
+        free_list(hmap->list+i, liberator);
     }
     free(hmap->list);
     free(hmap);
 }
 
 int
-add_hashmap(struct Hashmap *hmap, const char *key, int x)
+add_hashmap(struct Hashmap *hmap, const char *key, void *data)
 {
     unsigned int hash;
     char *str;
-    struct Data *data;
-    struct List *list;
+    struct container *container;
+    struct list *list;
     
     if (exists_hashmap(hmap, key)) return 0;
 
     hash = calc_hash(hmap->size, key);
     str = (char *)malloc(sizeof(char)*(strlen(key)+1));
     strcpy(str, key);
-    data = (struct Data *)malloc(sizeof(struct Data));
+    container = (struct container *)malloc(sizeof(struct container));
     list = hmap->list+hash;
 
-    data->k = str;
-    data->x = x;
-    data->next = NULL;
+    container->key = str;
+    container->data = data;
+    container->next = NULL;
 
     if (list->len == 0)
     {
-        list->head = data;
-        list->tail = data;
+        list->head = container;
+        list->tail = container;
     }
     else
     {
-        list->tail->next = data;
-        list->tail = data;
+        list->tail->next = container;
+        list->tail = container;
     }
     list->len++;
     return 1;
 }
 
 int
-remove_hashmap(struct Hashmap *hmap, const char *key)
+remove_hashmap(struct Hashmap *hmap, const char *key, void (*liberator)(void*))
 {
     unsigned int hash = calc_hash(hmap->size, key);
-    struct List *list;
-    struct Data *now, *prev = NULL;
+    struct list *list;
+    struct container *now, *prev = NULL;
 
     list = hmap->list+hash;
     now = list->head;
     for (;;)
     {
         if (now == NULL) return 0;
-        if (strcmp(key, now->k) == 0)
+        if (strcmp(key, now->key) == 0)
         {
             if (list->head == now) list->head = now->next;
             if (list->tail == now) list->tail = prev;
             if (prev != NULL) prev->next = now->next;
+            liberator(now->data);
             free(now);
             list->len--;
             return 1;
@@ -106,20 +121,20 @@ exists_hashmap(struct Hashmap *hmap, const char *key)
     return ret == NULL ? 0 : 1;
 }
 
-int *
+void *
 search_hashmap(struct Hashmap *hmap, const char *key)
 {
     unsigned int hash = calc_hash(hmap->size, key);
-    struct Data *data = (hmap->list+hash)->head;
+    struct container *container = (hmap->list+hash)->head;
 
     for (;;)
     {
-        if (data == NULL) return NULL;
-        if (strcmp(key, data->k) == 0)
+        if (container == NULL) return NULL;
+        if (strcmp(key, container->key) == 0)
         {
-            return &data->x;
+            return container->data;
         }
-        data = data->next;
+        container = container->next;
     }
 }
 
@@ -140,14 +155,17 @@ calc_hash(unsigned int size, const char *key)
 }
 
 static void
-free_list(struct List *list)
+free_list(struct list *list, void (*liberator)(void*))
 {
-    struct Data *now, *next;
+    struct container *now, *next;
+    
     if (list->len == 0) return;
     now = list->head;
     next = now->next;
+    
     for (;;)
     {
+        liberator(now->data);
         free(now);
         if (next == NULL) return;
         now = next;
@@ -170,29 +188,35 @@ count(const struct Hashmap *hmap)
 static void
 debug_print(const struct Hashmap *hmap)
 {
-    struct List *list;
-    struct Data *data;
+    struct list *list;
+    struct container *container;
     int i;
     for (i = 0; i < hmap->size; ++i)
     {
         list = hmap->list+i;
-        data = list->head;
+        container = list->head;
         for (;;)
         {
-            if (data != NULL)
+            if (container != NULL)
             {
                 printf("key=%s, val=%d, hash=%d\n",
-                        data->k,
-                        data->x,
-                        calc_hash(hmap->size, data->k));
+                        container->key,
+                        *(int*)container->data,
+                        calc_hash(hmap->size, container->key));
             }
             else
             {
                 break;
             }
-            data = data->next;
+            container = container->next;
         }
     }
+}
+
+static void
+liberator_int(void *data)
+{
+    free(data);
 }
 
 int
@@ -201,7 +225,7 @@ main(int argc, char *argv[])
     struct Hashmap *map = init_hashmap(16);
     const int BUFSIZE = 128;
     char buf[BUFSIZE], key[BUFSIZE];
-    int val, *val2;
+    int val, *valp;
 
     for (;;)
     {
@@ -210,15 +234,16 @@ main(int argc, char *argv[])
         {
             puts("key="); fgets(key, BUFSIZE, stdin);
             puts("val="); fgets(buf, BUFSIZE, stdin);
-            val = atoi(buf);
-            printf("Add to hashmap (%s, %d)\n", key, val);
-            add_hashmap(map, key, val) ? puts("Success") : puts("Failed");
+            valp = (int*)malloc(sizeof(int));
+            *valp = atoi(buf);
+            printf("Add to hashmap (%s, %d)\n", key, *valp);
+            add_hashmap(map, key, valp) ? puts("Success") : puts("Failed");
         }
         else if (strncmp(buf, "del", 3) == 0)
         {
             puts("key="); fgets(key, BUFSIZE, stdin);
             printf("Delete from hashmap (%s)\n", key);
-            remove_hashmap(map, key) ? puts("Success") : puts("Failed");
+            remove_hashmap(map, key, liberator_int) ? puts("Success") : puts("Failed");
         }
         else if (strncmp(buf, "set", 3) == 0)
         {
@@ -226,30 +251,30 @@ main(int argc, char *argv[])
             puts("val="); fgets(buf, BUFSIZE, stdin);
             val = atoi(buf);
             printf("Set new value to hashmap (%s, %d)\n", key, val);
-            val2 = search_hashmap(map, key);
-            if (val2 == NULL)
+            valp = search_hashmap(map, key);
+            if (valp == NULL)
             {
                 puts("Failed");
             }
             else
             {
                 puts("Success");
-                *val2 = val;
+                *valp = val;
             }
         }
         else if (strncmp(buf, "prn", 3) == 0)
         {
             puts("key="); fgets(key, BUFSIZE, stdin);
             printf("Search from hashmap (%s)\n", key);
-            val2 = search_hashmap(map, key);
-            if (val2 == NULL)
+            valp = search_hashmap(map, key);
+            if (valp == NULL)
             {
                 puts("Failed");
             }
             else
             {
                 puts("Success");
-                printf("val = %d\n", *val2);
+                printf("val = %d\n", *(int*)valp);
             }
         }
         else if (strncmp(buf, "all", 3) == 0)
@@ -259,9 +284,10 @@ main(int argc, char *argv[])
         }
         else
         {
-            fin_hashmap(map);
+            free_hashmap(map, liberator_int);
             return EXIT_SUCCESS;
         }
     }
 }
 #endif
+
