@@ -117,6 +117,7 @@ remove_blist(struct Blist *list, void (*liberator)(void *), int n)
 
     if (n >= list->len / 2)
     {
+        n = list->len-1-n;
         for (b = list->tail; ; --n)
         {
             if (n == 0)
