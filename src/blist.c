@@ -189,6 +189,33 @@ remove_blist2(struct Blist *list, int (*cmp)(void*, void*), void (*liberator)(vo
     return 0;
 }
 
+void *
+at_blist(struct Blist *list, int n)
+{
+    struct Blist_body *b;
+
+    if (n >= list->len) return NULL;
+
+    if (n >= list->len / 2)
+    {
+        b = list->tail;
+        for (n = list->len-1-n;; --n)
+        {
+            if (n == 0) return b;
+            b = b->prev;
+        }
+    }
+    else
+    {
+        b = list->head;
+        for (;; --n)
+        {
+            if (n == 0) return b;
+            b = b->next;
+        }
+    }
+}
+
 void
 init_iterator_blist(const struct Blist *list, struct iterator_blist *iter)
 {
