@@ -18,8 +18,24 @@ make_string()
     return string;
 }
 
+String *
+new_string(const String *str)
+{
+    String *string = make_string();
+    append_string(string, str);
+    return string;
+}
+
+String *
+new2_string(const char *str)
+{
+    String *string = make_string();
+    append3_string(string, str);
+    return string;
+}
+
 void
-release_string(String **string)
+free_string(String **string)
 {
     free((*string)->str);
     free(*string);
@@ -107,8 +123,8 @@ main(int argc, char *argv[])
     append3_string(str2, "ABCDEFG"); printf("%s\n", str2->str);
     append_string(str, str2); printf("%s\n", str->str);
 
-    release_string(&str);
-    release_string(&str2);
+    free_string(&str);
+    free_string(&str2);
     
     return EXIT_SUCCESS;
 }

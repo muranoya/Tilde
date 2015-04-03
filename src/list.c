@@ -4,6 +4,13 @@
 
 #include "tilde.h"
 
+struct List_body
+{
+    struct List_body *prev;
+    struct List_body *next;
+    void *data;
+};
+
 List *
 make_list()
 {

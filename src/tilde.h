@@ -12,33 +12,14 @@ typedef struct
     int size;
 } String;
 
-struct hashmap_container
-{
-    char *key;
-    void *data;
-    struct hashmap_container *next;
-};
-
-struct hashmap_list
-{
-    struct hashmap_container *head;
-    struct hashmap_container *tail;
-    int len;
-};
-
+struct hashmap_list;
 typedef struct
 {
     struct hashmap_list *list;
     int size;
 } Hashmap;
 
-struct List_body
-{
-    struct List_body *prev;
-    struct List_body *next;
-    void *data;
-};
-
+struct List_body;
 typedef struct
 {
     struct List_body *head;
@@ -135,7 +116,9 @@ void   next_token(Token *token);
 
 // string.c
 String *make_string();
-void    release_string(String **string);
+String *new_string(const String *str);
+String *new2_string(const char *str);
+void    free_string(String **string);
 void    append_string(String *dst, const String *src);
 void    append2_string(String *dst, char c);
 void    append3_string(String *dst, const char *src);
@@ -156,9 +139,9 @@ void *value_iter_list(const iter_list *iter);
 // hashmap.c
 Hashmap *make_hashmap(int size);
 void     free_hashmap(Hashmap **h, void (*)(void*));
-bool     add_hashmap(Hashmap *h, const char *key, void *data);
-bool     remove_hashmap(Hashmap *h, const char *key, void (*)(void*));
-bool     exists_hashmap(Hashmap *h, const char *key);
-void    *search_hashmap(Hashmap *h, const char *key);
+bool     add_hashmap(Hashmap *h, const String *key, void *data);
+bool     remove_hashmap(Hashmap *h, const String *key, void (*)(void*));
+bool     exists_hashmap(Hashmap *h, const String *key);
+void    *search_hashmap(Hashmap *h, const String *key);
 #endif
 

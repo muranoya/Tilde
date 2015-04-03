@@ -7,14 +7,14 @@ string: string.c tilde.h
 list: list.c tilde.h
 	$(CC) $(CFLAGS) -o list list.c -DTEST_LIST
 
-hashmap: hashmap.c tilde.h
-	$(CC) $(CFLAGS) -o hashmap hashmap.c -DTEST_HASHMAP
+hashmap: hashmap.c tilde.h string.c
+	$(CC) $(CFLAGS) -o hashmap hashmap.c string.c -DTEST_HASHMAP
 
-lex: lex.c tilde.h
+lex: lex.c tilde.h string.c
 	$(CC) $(CFLAGS) -o lex lex.c string.c -DTEST_LEX
 
-genparser: genparser.c tilde.h hashmap.c lex.c
-	$(CC) $(CFLAGS) -o genparser genparser.c hashmap.c list.c lex.c
+genparser: genparser.c tilde.h hashmap.c lex.c list.c string.c
+	$(CC) $(CFLAGS) -o genparser genparser.c hashmap.c list.c string.c lex.c
 
 clean:
 

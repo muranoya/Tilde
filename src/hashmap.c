@@ -4,7 +4,21 @@
 
 #include "tilde.h"
 
-static unsigned int calc_hash(unsigned int size, const char *key);
+struct hashmap_container
+{
+    String *key;
+    void *data;
+    struct hashmap_container *next;
+};
+
+struct hashmap_list
+{
+    struct hashmap_container *head;
+    struct hashmap_container *tail;
+    int len;
+};
+
+static unsigned int calc_hash(unsigned int size, const String *key);
 static void free_hashmaplist(struct hashmap_list *list, void (*)(void*));
 
 Hashmap *
@@ -45,12 +59,11 @@ free_hashmap(Hashmap **hmap, void (*liberator)(void*))
 }
 
 bool
-add_hashmap(Hashmap *hmap, const char *key, void *data)
+add_hashmap(Hashmap *hmap, const String *key, void *data)
 {
     unsigned int hash;
     struct hashmap_container *container;
     struct hashmap_list *list;
-    char *new_key;
     
     if (exists_hashmap(hmap, key)) return false;
 
@@ -58,9 +71,7 @@ add_hashmap(Hashmap *hmap, const char *key, void *data)
     container = (struct hashmap_container *)malloc(sizeof(struct hashmap_container));
     list = hmap->list+hash;
 
-    new_key = (char*)malloc(sizeof(char)*(strlen(key)+1));
-    strcpy(new_key, key);
-    container->key = new_key;
+    container->key = new_string(key);
     container->data = data;
     container->next = NULL;
 
@@ -79,7 +90,7 @@ add_hashmap(Hashmap *hmap, const char *key, void *data)
 }
 
 bool
-remove_hashmap(Hashmap *hmap, const char *key, void (*liberator)(void*))
+remove_hashmap(Hashmap *hmap, const String *key, void (*liberator)(void*))
 {
     unsigned int hash = calc_hash(hmap->size, key);
     struct hashmap_list *list;
@@ -90,13 +101,13 @@ remove_hashmap(Hashmap *hmap, const char *key, void (*liberator)(void*))
     for (;;)
     {
         if (now == NULL) return false;
-        if (strcmp(key, now->key) == 0)
+        if (strcmp(key->str, now->key->str) == 0)
         {
             if (list->head == now) list->head = now->next;
             if (list->tail == now) list->tail = prev;
             if (prev != NULL) prev->next = now->next;
             liberator(now->data);
-            free(now->key);
+            free_string(&now->key);
             free(now);
             list->len--;
             return true;
@@ -107,13 +118,13 @@ remove_hashmap(Hashmap *hmap, const char *key, void (*liberator)(void*))
 }
 
 bool
-exists_hashmap(Hashmap *hmap, const char *key)
+exists_hashmap(Hashmap *hmap, const String *key)
 {
     return search_hashmap(hmap, key) != NULL;
 }
 
 void *
-search_hashmap(Hashmap *hmap, const char *key)
+search_hashmap(Hashmap *hmap, const String *key)
 {
     unsigned int hash = calc_hash(hmap->size, key);
     struct hashmap_container *container = (hmap->list+hash)->head;
@@ -121,7 +132,7 @@ search_hashmap(Hashmap *hmap, const char *key)
     for (;;)
     {
         if (container == NULL) return NULL;
-        if (strcmp(key, container->key) == 0)
+        if (strcmp(key->str, container->key->str) == 0)
         {
             return container->data;
         }
@@ -130,17 +141,17 @@ search_hashmap(Hashmap *hmap, const char *key)
 }
 
 static unsigned int
-calc_hash(unsigned int size, const char *key)
+calc_hash(unsigned int size, const String *key)
 {
     // FNV Hash
     unsigned int hash;
     int i;
-    int len = strlen(key);
+    int len = key->len;
 
     hash = 2166136261u;
     for(i = 0 ; i < len; ++i)
     {
-        hash = (16777619u*hash) ^ (*key+i);
+        hash = (16777619u*hash) ^ (*key->str+i);
     }
     return hash % size;
 }
@@ -157,7 +168,7 @@ free_hashmaplist(struct hashmap_list *list, void (*liberator)(void*))
     for (;;)
     {
         liberator(now->data);
-        free(now->key);
+        free_string(&now->key);
         free(now);
         if (next == NULL) return;
         now = next;
@@ -192,7 +203,7 @@ debug_print(const Hashmap *hmap)
             if (container != NULL)
             {
                 printf("key=%s, val=%d, hash=%d\n",
-                        container->key,
+                        container->key->str,
                         *(int*)container->data,
                         calc_hash(hmap->size, container->key));
             }
@@ -242,14 +253,14 @@ main(int argc, char *argv[])
             valp = (int*)malloc(sizeof(int));
             *valp = atoi(buf);
             printf("Add to hashmap (%s, %d)\n", key, *valp);
-            add_hashmap(map, key, valp) ? puts("Success") : puts("Failed");
+            add_hashmap(map, new2_string(key), valp) ? puts("Success") : puts("Failed");
         }
         else if (strncmp(buf, "del", 3) == 0)
         {
             printf("key: "); fgets(key, BUFSIZE, stdin);
             key[strlen(key)-1] = '\0';
             printf("Delete from hashmap (%s)\n", key);
-            remove_hashmap(map, key, liberator_int) ? puts("Success") : puts("Failed");
+            remove_hashmap(map, new2_string(key), liberator_int) ? puts("Success") : puts("Failed");
         }
         else if (strncmp(buf, "set", 3) == 0)
         {
@@ -258,7 +269,7 @@ main(int argc, char *argv[])
             printf("val: "); fgets(buf, BUFSIZE, stdin);
             val = atoi(buf);
             printf("Set new value to hashmap (%s, %d)\n", key, val);
-            valp = search_hashmap(map, key);
+            valp = search_hashmap(map, new2_string(key));
             if (valp == NULL)
             {
                 puts("Failed");
@@ -274,7 +285,7 @@ main(int argc, char *argv[])
             printf("key: "); fgets(key, BUFSIZE, stdin);
             key[strlen(key)-1] = '\0';
             printf("Search from hashmap (%s)\n", key);
-            valp = search_hashmap(map, key);
+            valp = search_hashmap(map, new2_string(key));
             if (valp == NULL)
             {
                 puts("Failed");

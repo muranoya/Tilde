@@ -25,7 +25,6 @@ static char *keywords[] =
 };
 
 /* prototype */
-static bool make_endfile(Token *tk);
 static bool make_ident(Token *tk, int c);
 static bool make_digit(Token *tk, int c);
 static bool make_digit_base(Token *tk, int c, int base, String *p);
@@ -222,7 +221,10 @@ next_token(Token *token)
     }
     else if (c == EOF)
     {
-        make_endfile(token);
+        token->kind = TK_ENDFILE;
+        token->row = line;
+        token->col = column;
+        token->str = NULL;
         return;
     }
 
@@ -237,16 +239,6 @@ next_token(Token *token)
 
     fprintf(stderr, "Error:%d:%d: Invalid token.\n", line, column);
     exit(EXIT_FAILURE);
-}
-
-static bool
-make_endfile(Token *tk)
-{
-    tk->kind = TK_ENDFILE;
-    tk->row = line;
-    tk->col = column;
-    tk->str = NULL;
-    return true;
 }
 
 static bool
