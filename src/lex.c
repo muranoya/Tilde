@@ -2,22 +2,20 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+
 #include "tilde.h"
 
 #define IDENT_MAXSIZE (256)
 #define STACK_SIZE (8)
 
-//#define TEST_LEX
-
 static FILE *file = NULL;
-static int autoclose;
-static int line;
-static int column;
+static bool autoclose;
+static int line, column;
 
-static int stack[STACK_SIZE];
-static int sp;
+static int stack[STACK_SIZE], sp;
 
-static char *keywords[] = {
+static char *keywords[] =
+{
     "enum",   "unsigned", "break",  "return",  "void",     "case",
     "float",  "short",    "char",   "for",     "signed",   "while",
     "const",  "goto",     "sizeof", "bool",    "continue", "if",
@@ -28,182 +26,169 @@ static char *keywords[] = {
 };
 
 /* prototype */
-static int  make_endfile(struct Token *tk);
-static int  make_ident(struct Token *tk, int c);
-static int  make_digit(struct Token *tk, int c);
-static int  make_digit_base(struct Token *tk, int c, int base, char *p);
-static int  make_float_base(int c, int base, char *p);
-static int  make_string_literal(struct Token *tk);
-static int  make_punctuator(struct Token *tk, int c);
+static bool make_endfile(Token *tk);
+static bool make_ident(Token *tk, int c);
+static bool make_digit(Token *tk, int c);
+static bool make_digit_base(Token *tk, int c, int base, String *p);
+static bool make_float_base(int c, int base, String *p);
+static bool make_string_literal(Token *tk);
+static bool make_punctuator(Token *tk, int c);
 
-static int  estimate(int x);
-static int  is_simple_escape();
-static int  is_nondigit(int c);
-static int  is_digit(int c, int base);
-static int  is_space(int c);
-static int  is_return(int c);
+static bool estimate(int x);
+static bool is_simple_escape();
+static bool is_nondigit(int c);
+static bool is_digit(int c, int base);
+static bool is_space(int c);
+static bool is_return(int c);
 
-static void set_keyword(struct Token *tk);
+static void set_keyword(Token *tk);
 static void skip();
 static void pushback(int c);
 static int  nextchar();
 
-int
-openFile(const char *f, int ac)
+bool
+open_file(const char *f, bool ac)
 {
     file = fopen(f, "r");
     autoclose = ac;
     if (file == NULL)
     {
         perror("fopen");
-        return 0;
+        return false;
     }
     line = 1;
     column = 0;
     sp = 0;
-    return 1;
+    return true;
 }
 
 void
-closeFile()
+close_file()
 {
     if (fclose(file) != 0) perror("fclose");
     file = NULL;
 }
 
 void
-printToken(const struct Token *tk)
+print_token(const Token *tk)
 {
     char *p;
     switch (tk->kind)
     {
-    case TK_IDENT:         p = "IDENT";      break;
-    case TK_KEYWORD:       p = "KEYWORD";    break;
-    case TK_CONSTANT:
-        switch (tk->ckind)
-        {
-        case CK_CHAR:      p = "CONSTANT(CHAR)";       break;
-        case CK_DECIMAL:   p = "CONSTANT(DECIMAL)";    break;
-        case CK_OCTAL:     p = "CONSTANT(OCTAL)";      break;
-        case CK_HEXA:      p = "CONSTANT(HEXA)";       break;
-        case CK_FLOAT:     p = "CONSTANT(FLOAT)";      break;
-        case CK_HEXAFLOAT: p = "CONSTANT(HEXA_FLOAT)"; break;
-        case CK_INVALID:   p = "CONSTANT(INVALID)";    break;
-        }
-        break;
-    case TK_STRING:        p = "STRING";     break;
-    case TK_PUNCTUATOR:    p = "PUNCTUATOR"; break;
-    case TK_ENDFILE:       p = "ENDFILE";    break;
-    default:               p = "UNKNOWN";    break;
+    case TK_IDENT:      p = "IDENT";      break;
+    case TK_KEYWORD:    p = "KEYWORD";    break;
+    case TK_CONSTANT:   p = "CONSTANT";   break;
+    case TK_STRING:     p = "STRING";     break;
+    case TK_PUNCTUATOR: p = "PUNCTUATOR"; break;
+    case TK_ENDFILE:    p = "ENDFILE";    break;
+    default:            p = "UNKNOWN";    break;
     }
-    printf("%s (%d:%d)%s\n", p, tk->row, tk->col,
-            tk->kind == TK_PUNCTUATOR ? punctuatorToString(tk->id) : tk->str);
+    printf("%s (%d:%d)%s\n",
+            p,
+            tk->row,
+            tk->col,
+            tk->kind == TK_PUNCTUATOR ? punctuator_to_string(tk->id)
+                                      : tk->str->str);
 }
 
 char *
-punctuatorToString(enum PnctID p)
+punctuator_to_string(enum PnctID p)
 {
     switch (p)
     {
-    case PSQR_BRCK_L:   return "[";
-    case PSQR_BRCK_R:   return "]";
-    case PPAREN_L:      return "(";
-    case PPAREN_R:      return ")";
-    case PCRL_BRCK_L:   return "{";
-    case PCRL_BRCK_R:   return "}";
-    case PDOT:          return ".";
-    case PARRW:         return "->";
-    case PPLUS_PLUS:    return "++";
-    case PMINS_MINS:    return "--";
-    case PAMPD:         return "&";
-    case PMULT:         return "*";
-    case PPLUS:         return "+";
-    case PMINS:         return "-";
-    case PTILDE:        return "~";
-    case PEXCM:         return "!";
-    case PDIV:          return "/";
-    case PMOD:          return "%";
-    case PSHIFT_L:      return "<<";
-    case PSHIFT_R:      return ">>";
-    case PLESS:         return "<";
-    case PGRT:          return ">";
-    case PLESS_EQ:      return "<=";
-    case PGRT_EQ:       return ">=";
-    case PEQ:           return "==";
-    case PNEQ:          return "!=";
-    case PCARET:        return "^";
-    case PVBAR:         return "|";
-    case PAMPD_AMPD:    return "&&";
-    case PVBAR_VBAR:    return "||";
-    case PQMARK:        return "?";
-    case PCOLON:        return ":";
-    case PSCOLON:       return ";";
-    case PTLEAD:        return "...";
-    case PCOMMA:        return ",";
-    case PASGN:         return "=";
-    case PASGN_MULT:    return "*=";
-    case PASGN_DIV:     return "/=";
-    case PASGN_MOD:     return "%=";
-    case PASGN_PLUS:    return "+=";
-    case PASGN_MINS:    return "-=";
-    case PASGN_SHIFT_L: return "<<=";
-    case PASGN_SHIFT_R: return ">>=";
-    case PASGN_AMPD:    return "&=";
-    case PASGN_CARET:   return "^=";
-    case PASGN_VBAR:    return "|=";
-    default:            return "UNKNOWN";
+    case P_SQR_BRCK_L:   return "[";
+    case P_SQR_BRCK_R:   return "]";
+    case P_PAREN_L:      return "(";
+    case P_PAREN_R:      return ")";
+    case P_CRL_BRCK_L:   return "{";
+    case P_CRL_BRCK_R:   return "}";
+    case P_DOT:          return ".";
+    case P_ARRW:         return "->";
+    case P_PLUS_PLUS:    return "++";
+    case P_MINS_MINS:    return "--";
+    case P_AMPD:         return "&";
+    case P_MULT:         return "*";
+    case P_PLUS:         return "+";
+    case P_MINS:         return "-";
+    case P_TILDE:        return "~";
+    case P_EXCM:         return "!";
+    case P_DIV:          return "/";
+    case P_MOD:          return "%";
+    case P_SHIFT_L:      return "<<";
+    case P_SHIFT_R:      return ">>";
+    case P_LESS:         return "<";
+    case P_GRT:          return ">";
+    case P_LESS_EQ:      return "<=";
+    case P_GRT_EQ:       return ">=";
+    case P_EQ:           return "==";
+    case P_NEQ:          return "!=";
+    case P_CARET:        return "^";
+    case P_VBAR:         return "|";
+    case P_AMPD_AMPD:    return "&&";
+    case P_VBAR_VBAR:    return "||";
+    case P_QMARK:        return "?";
+    case P_COLON:        return ":";
+    case P_SCOLON:       return ";";
+    case P_TLEAD:        return "...";
+    case P_COMMA:        return ",";
+    case P_ASGN:         return "=";
+    case P_ASGN_MULT:    return "*=";
+    case P_ASGN_DIV:     return "/=";
+    case P_ASGN_MOD:     return "%=";
+    case P_ASGN_PLUS:    return "+=";
+    case P_ASGN_MINS:    return "-=";
+    case P_ASGN_SHIFT_L: return "<<=";
+    case P_ASGN_SHIFT_R: return ">>=";
+    case P_ASGN_AMPD:    return "&=";
+    case P_ASGN_CARET:   return "^=";
+    case P_ASGN_VBAR:    return "|=";
+    default:             return "UNKNOWN";
     }
 }
 
-struct Token *nextToken2()
-{
-    struct Token *tk = (struct Token*)malloc(sizeof(struct Token));
-    nextToken(tk);
-    return tk;
-}
-
-int
-nextToken(struct Token *token)
+void
+next_token(Token *token)
 {
     int c;
     skip();
     c = nextchar();
 
     token->kind = TK_INVALID;
-    token->id = PINVALID;
-    token->ckind = CK_INVALID;
+    token->id = P_INVALID;
     token->row = line;
     token->col = column;
     token->str = NULL;
 
-
     if (is_nondigit(c))
     {
-        return make_ident(token, c);
+        make_ident(token, c);
+        return;
     }
     else if (is_digit(c, 10))
     {
-        return make_digit(token, c);
+        make_digit(token, c);
+        return;
     }
     else if (c == '"')
     {
-        return make_string_literal(token);
+        make_string_literal(token);
+        return;
     }
     else if (c == '\'')
     {
-        char *p = (char*)malloc(sizeof(char)*8);
+        String *p = make_string();
         token->kind = TK_CONSTANT;
-        token->ckind = CK_CHAR;
         token->row = line;
         token->col = column-1;
         token->str = p;
+
         c = nextchar();
         if (c == '\\')
         {
             if (is_simple_escape())
             {
-                *p++ = '\\';
-                *p++ = nextchar();
+                append2_string(p, '\\');
+                append2_string(p, nextchar());
             }
             else
             {
@@ -212,23 +197,24 @@ nextToken(struct Token *token)
         }
         else
         {
-            *p++ = c;
+            append2_string(p, c);
         }
-        return estimate('\'');
+        estimate('\'');
+        return;
     }
     else if (c == '.')
     {
         c = nextchar();
         if (is_digit(c, 10))
         {
-            char *p = (char*)malloc(sizeof(char)*IDENT_MAXSIZE);
+            String *p = make_string();
             pushback(c);
             token->kind = TK_CONSTANT;
-            token->ckind = CK_FLOAT;
             token->row = line;
             token->col = column-1;
             token->str = p;
-            return make_float_base('.', 10, p);
+            make_float_base('.', 10, p);
+            return;
         }
         else
         {
@@ -237,54 +223,59 @@ nextToken(struct Token *token)
     }
     else if (c == EOF)
     {
-        return make_endfile(token);
+        make_endfile(token);
+        return;
     }
 
     if (make_punctuator(token, c))
     {
-        return 1;
+        return;
     }
     else
     {
         pushback(c);
     }
-    return 0;
+
+    fprintf(stderr, "Error:%d:%d: Invalid token.\n", line, column);
+    exit(EXIT_FAILURE);
 }
 
-static int
-make_endfile(struct Token *tk)
+static bool
+make_endfile(Token *tk)
 {
     tk->kind = TK_ENDFILE;
     tk->row = line;
     tk->col = column;
-    tk->str = "";
-    return 0;
+    tk->str = NULL;
+    return true;
 }
 
-static int
-make_ident(struct Token *tk, int c)
+static bool
+make_ident(Token *tk, int c)
 {
-    char *ident = (char*)malloc(sizeof(char) * IDENT_MAXSIZE);
-    int len = 0;
+    String *ident;
+
+    ident = make_string();
     tk->kind = TK_IDENT;
     tk->row = line;
     tk->col = column;
     tk->str = ident;
     for (; is_nondigit(c) || is_digit(c, 10); c = nextchar())
     {
-        ident[len++] = c;
+        append2_string(ident, c);
     }
-    ident[len] = 0;
     pushback(c);
     set_keyword(tk);
-    return 1;
+    return true;
 }
 
-static int
-make_digit(struct Token *tk, int c)
+static bool
+make_digit(Token *tk, int c)
 {
-    char *val = (char*)malloc(sizeof(char)*IDENT_MAXSIZE);
-    int ret;
+    String *val;
+    bool ret;
+
+    val = make_string();
     tk->kind = TK_CONSTANT;
     tk->row = line;
     tk->col = column;
@@ -294,46 +285,41 @@ make_digit(struct Token *tk, int c)
         c = nextchar();
         if (c == 'x' || c == 'X')
         {
-            tk->ckind = CK_HEXA;
             ret = make_digit_base(tk, nextchar(), 16, val);
         }
         else
         {
-            tk->ckind = CK_OCTAL;
             ret = make_digit_base(tk, c, 8, val);
         }
     }
     else
     {
-        tk->ckind = CK_DECIMAL;
         ret = make_digit_base(tk, c, 10, val);
     }
     return ret;
 }
 
-static int
-make_digit_base(struct Token *tk, int c, int base, char *p)
+static bool
+make_digit_base(Token *tk, int c, int base, String *p)
 {
-    int len = 0;
     for (; is_digit(c, base); c = nextchar())
     {
-        p[len++] = c;
+        append2_string(p, c);
     }
 
     if (c == '.' || c == 'e' || c == 'E' || c == 'p' || c == 'P')
     {
-        tk->ckind = (base == 16) ? CK_HEXAFLOAT : CK_FLOAT;
-        return make_float_base(c, (base == 16) ? 16 : 10, p+len);
+        return make_float_base(c, (base == 16) ? 16 : 10, p);
     }
 
     if (c == 'u' || c == 'U' || c == 'l' || c == 'L')
     {
         int d = nextchar();
-        p[len++] = c;
+        append2_string(p, c);
         if (((c == 'u' || c == 'U') && (d == 'l' || d == 'L')) ||
             ((c == 'l' || c == 'L') && (d == 'u' || d == 'U')))
         {
-            p[len++] = d;
+            append2_string(p, d);
         }
         else
         {
@@ -344,31 +330,28 @@ make_digit_base(struct Token *tk, int c, int base, char *p)
     {
         pushback(c);
     }
-    p[len] = 0;
-    return 1;
+    return true;
 }
 
-static int
-make_float_base(int c, int base, char *p)
+static bool
+make_float_base(int c, int base, String *p)
 {
-    int len = 0;
-
     if (!(base == 10 && (c == '.' || c == 'e' || c == 'E')) &&
         !(base == 16 && (c == '.' || c == 'p' || c == 'P')))
     {
         //error
-        return 0;
+        return false;
     }
 
     if (c == '.')
     {
-        p[len++] = c;
+        append2_string(p, c);
         c = nextchar();
         if (is_digit(c, base))
         {
             for (; is_digit(c, base); c = nextchar())
             {
-                p[len++] = c;
+                append2_string(p, c);
             }
         }
     }
@@ -387,98 +370,93 @@ make_float_base(int c, int base, char *p)
 
     if (c == 'e' || c == 'E' || c == 'p' || c == 'P')
     {
-        p[len++] = c;
+        append2_string(p, c);
         c = nextchar();
         if (c == '+' || c == '-')
         {
-            p[len++] = c;
+            append2_string(p, c);
             c = nextchar();
         }
         
         for (; is_digit(c, 10); c = nextchar())
         {
-            p[len++] = c;
+            append2_string(p, c);
         }
     }
 
     if (c == 'f' || c == 'F' || c == 'l' || c == 'L')
     {
-        p[len++] = c;
+        append2_string(p, c);
     }
-    p[len] = 0;
-    return 1;
+    return true;
 }
 
-static int
-make_string_literal(struct Token *tk)
+static bool
+make_string_literal(Token *tk)
 {
-    char *str = (char*)malloc(sizeof(char)*IDENT_MAXSIZE);
-    int size = IDENT_MAXSIZE;
+    String *str;
     int c;
-    int len = 0;
+
+    str = make_string();
     tk->kind = TK_STRING;
     tk->row = line;
     tk->col = column;
     tk->str = str;
+
     for (;;)
     {
         c = nextchar();
         if (c == '\n')
         {
-            return 0;
+            return false;
         }
         else if (c == '"')
         {
-            str[len] = 0;
-            return 1;
+            append2_string(str, '\0');
+            return true;
         }
         else
         {
-            if (len+2 >= size)
-            {
-                str = (char*)realloc(str, sizeof(char)*(size+IDENT_MAXSIZE));
-            }
-
             if (c == '\\' && is_simple_escape())
             {
-                str[len++] = '\\';
-                str[len++] = nextchar();
+                append2_string(str, '\\');
+                append2_string(str, nextchar());
             }
             else
             {
-                str[len++] = c;
+                append2_string(str, c);
             }
         }
     }
 }
 
-static int
-make_punctuator(struct Token *tk, int c)
+static bool
+make_punctuator(Token *tk, int c)
 {
-    tk->id = PINVALID;
+    tk->id = P_INVALID;
     tk->row = line;
     tk->col = column;
     tk->str = NULL;
     switch (c)
     {
     case '[':
-        tk->id = PSQR_BRCK_L; break;
+        tk->id = P_SQR_BRCK_L; break;
     case ']':
-        tk->id = PSQR_BRCK_R; break;
+        tk->id = P_SQR_BRCK_R; break;
     case '(':
-        tk->id = PPAREN_L; break;
+        tk->id = P_PAREN_L; break;
     case ')':
-        tk->id = PPAREN_R; break;
+        tk->id = P_PAREN_R; break;
     case '{':
-        tk->id = PCRL_BRCK_L; break;
+        tk->id = P_CRL_BRCK_L; break;
     case '}':
-        tk->id = PCRL_BRCK_R; break;
+        tk->id = P_CRL_BRCK_R; break;
     case '.':
         if (estimate('.'))
         {
             if (estimate('.'))
             {
-                tk->id = PTLEAD;
+                tk->id = P_TLEAD;
             }
             else
             {
@@ -487,69 +465,69 @@ make_punctuator(struct Token *tk, int c)
         }
         else
         {
-            tk->id = PDOT;
+            tk->id = P_DOT;
         }
         break;
     case ',':
-        tk->id = PCOMMA; break;
+        tk->id = P_COMMA; break;
     case '-':
         c = nextchar();
-        if (c == '>')      tk->id = PARRW;
-        else if (c == '-') tk->id = PMINS_MINS;
-        else if (c == '=') tk->id = PASGN_MINS;
+        if (c == '>')      tk->id = P_ARRW;
+        else if (c == '-') tk->id = P_MINS_MINS;
+        else if (c == '=') tk->id = P_ASGN_MINS;
         else
         {
-            tk->id = PMINS;
+            tk->id = P_MINS;
             pushback(c);
         }
         break;
     case '+':
         c = nextchar();
-        if (c == '+')      tk->id = PPLUS_PLUS;
-        else if (c == '=') tk->id = PASGN_PLUS;
+        if (c == '+')      tk->id = P_PLUS_PLUS;
+        else if (c == '=') tk->id = P_ASGN_PLUS;
         else
         {
-            tk->id = PPLUS;
+            tk->id = P_PLUS;
             pushback(c);
         }
         break;
     case '&':
         c = nextchar();
-        if (c == '&')      tk->id = PAMPD_AMPD;
-        else if (c == '=') tk->id = PASGN_AMPD;
+        if (c == '&')      tk->id = P_AMPD_AMPD;
+        else if (c == '=') tk->id = P_ASGN_AMPD;
         else
         {
-            tk->id = PAMPD;
+            tk->id = P_AMPD;
             pushback(c);
         }
         break;
     case '*':
-        tk->id = estimate('=') ? PASGN_MULT : PMULT;
+        tk->id = estimate('=') ? P_ASGN_MULT : P_MULT;
         break;
     case '~':
-        tk->id = PTILDE; break;
+        tk->id = P_TILDE; break;
     case '!':
-        tk->id = estimate('=') ? PNEQ : PEXCM;
+        tk->id = estimate('=') ? P_NEQ : P_EXCM;
         break;
     case '/':
-        tk->id = estimate('=') ? PASGN_DIV : PDIV;
+        tk->id = estimate('=') ? P_ASGN_DIV : P_DIV;
         break;
     case '%':
-        tk->id = estimate('=') ? PASGN_MOD : PMOD;
+        tk->id = estimate('=') ? P_ASGN_MOD : P_MOD;
         break;
     case '<':
         c = nextchar();
         if (c == '<')
         {
-            tk->id = estimate('=') ? PASGN_SHIFT_L : PSHIFT_L;
+            tk->id = estimate('=') ? P_ASGN_SHIFT_L : P_SHIFT_L;
         }
         else if (c == '=')
         {
-            tk->id = PLESS_EQ;
+            tk->id = P_LESS_EQ;
         }
         else
         {
-            tk->id = PLESS;
+            tk->id = P_LESS;
             pushback(c);
         }
         break;
@@ -557,70 +535,70 @@ make_punctuator(struct Token *tk, int c)
         c = nextchar();
         if (c == '>')
         {
-            tk->id = estimate('=') ? PASGN_SHIFT_R : PSHIFT_R;
+            tk->id = estimate('=') ? P_ASGN_SHIFT_R : P_SHIFT_R;
         }
         else if (c == '=')
         {
-            tk->id = PGRT_EQ;
+            tk->id = P_GRT_EQ;
         }
         else
         {
-            tk->id = PGRT;
+            tk->id = P_GRT;
             pushback(c);
         }
         break;
     case '=':
-        tk->id = estimate('=') ? PEQ : PASGN;
+        tk->id = estimate('=') ? P_EQ : P_ASGN;
         break;
     case '^':
-        tk->id = estimate('=') ? PASGN_CARET : PCARET;
+        tk->id = estimate('=') ? P_ASGN_CARET : P_CARET;
         break;
     case '|':
         c = nextchar();
         if (c == '|')
         {
-            tk->id = PVBAR_VBAR;
+            tk->id = P_VBAR_VBAR;
         }
         else if (c == '=')
         {
-            tk->id = PASGN_VBAR;
+            tk->id = P_ASGN_VBAR;
         }
         else
         {
-            tk->id = PVBAR;
+            tk->id = P_VBAR;
         }
         break;
     case '?':
-        tk->id = PQMARK;
+        tk->id = P_QMARK;
         break;
     case ':':
-        tk->id = PCOLON;
+        tk->id = P_COLON;
         break;
     case ';':
-        tk->id = PSCOLON;
+        tk->id = P_SCOLON;
         break;
     }
 
-    if (tk->id != PINVALID)
+    if (tk->id == P_INVALID)
     {
-        tk->kind = TK_PUNCTUATOR;
-        return 1;
+        return false;
     }
     else
     {
-        return 0;
+        tk->kind = TK_PUNCTUATOR;
+        return true;
     }
 }
 
-static int
+static bool
 estimate(int x)
 {
     int c = nextchar();
-    if (x == c) return 1; else pushback(c);
-    return 0;
+    if (x == c) return true; else pushback(c);
+    return false;
 }
 
-static int
+static bool
 is_simple_escape()
 {
     int c = nextchar();
@@ -630,51 +608,49 @@ is_simple_escape()
     case 'a':  case 'b': case 'f':  case 'n':
     case 'r':  case 't': case 'v':
         pushback(c);
-        return 1;
+        return true;
     default:
         pushback(c);
-        return 0;
+        return false;
     }
 }
 
-static int
+static bool
 is_nondigit(int c) { return isalpha(c) || c == '_'; }
 
-static int
+static bool
 is_digit(int c, int base)
 {
     switch (base)
     {
     case 8:
         return isdigit(c) && c != '8' && c != '9';
-        break;
     case 10:
         return isdigit(c);
-        break;
     case 16:
         return isdigit(c) ||
             c == 'a' || c == 'b' || c == 'c' || c == 'd' || c == 'e' || c == 'f' ||
             c == 'A' || c == 'B' || c == 'C' || c == 'D' || c == 'E' || c == 'F';
-        break;
     default:
+        //error
         ;
     }
-    return 0;
+    return false;
 }
 
-static int
+static bool
 is_space(int c) { return c == ' ' || c == '\t' || c == '\v'; }
 
-static int
+static bool
 is_return(int c) { return c == '\n' || c == '\r'; }
 
 static void
-set_keyword(struct Token *tk)
+set_keyword(Token *tk)
 {
     int i;
     for (i = 0; keywords[i] != 0; i++)
     {
-        if (strcmp(keywords[i], tk->str) == 0)
+        if (strcmp(keywords[i], tk->str->str) == 0)
         {
             tk->kind = TK_KEYWORD;
             return;
@@ -739,18 +715,13 @@ static int
 nextchar()
 {
     int c;
-    if (sp > 0)
-    {
-        return stack[--sp];
-    }
+
+    if (sp > 0) return stack[--sp];
     
     c = (file == NULL) ? EOF : fgetc(file);
     if (c == EOF)
     {
-        if (autoclose)
-        {
-            closeFile();
-        }
+        if (autoclose) close_file();
     }
     else if (c == '\n')
     {
@@ -768,19 +739,18 @@ nextchar()
 int
 main(int argc, char *argv[])
 {
-    struct Token token;
+    Token token;
 
-    if (argc != 2)
-    {
-        exit(EXIT_FAILURE);
-    }
+    if (argc != 2) exit(EXIT_FAILURE);
 
-    openFile(argv[1], 1);
-    for (; nextToken(&token) != 0;)
+    open_file(argv[1], 1);
+    for (;;) 
     {
-        printToken(&token);
+        next_token(&token);
+        if (token.kind == TK_ENDFILE) break;
+        print_token(&token);
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
 #endif
 

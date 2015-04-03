@@ -1,17 +1,20 @@
 CC=cc
 CFLAGS=-O2 -Wall
 
-blist: blist.c blist.h
-	$(CC) $(CFLAGS) -o blist blist.c -DTEST_BLIST
+string: string.c tilde.h
+	$(CC) $(CFLAGS) -o string string.c -DTEST_STRING
 
-hashmap: hashmap.c hashmap.h
+list: list.c tilde.h
+	$(CC) $(CFLAGS) -o list list.c -DTEST_LIST
+
+hashmap: hashmap.c tilde.h
 	$(CC) $(CFLAGS) -o hashmap hashmap.c -DTEST_HASHMAP
 
 lex: lex.c tilde.h
-	$(CC) $(CFLAGS) -o lex lex.c -DTEST_LEX
+	$(CC) $(CFLAGS) -o lex lex.c string.c -DTEST_LEX
 
-genparser: genparser.c tilde.h hashmap.c hashmap.h lex.c
-	$(CC) $(CFLAGS) -o genparser genparser.c hashmap.c lex.c
+genparser: genparser.c tilde.h hashmap.c lex.c
+	$(CC) $(CFLAGS) -o genparser genparser.c hashmap.c list.c lex.c
 
 clean:
 
