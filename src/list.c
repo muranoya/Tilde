@@ -2,26 +2,26 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "blist.h"
+#include "tilde.h"
 
-struct Blist *
-make_blist()
+List *
+make_list()
 {
-    struct Blist *blist;
+    List *list;
 
-    blist = (struct Blist*)malloc(sizeof(struct Blist));
-    blist->head = blist->tail = NULL;
-    blist->len = 0;
-    return blist;
+    list = (List*)malloc(sizeof(List));
+    list->head = list->tail = NULL;
+    list->len = 0;
+    return list;
 }
 
 void
-free_blist(struct Blist *list, void (*liberator)(void *))
+free_list(List **list, void (*liberator)(void *))
 {
-    struct Blist_body *now, *next;
+    struct List_body *now, *next;
 
-    if (list->len == 0) return;
-    now = list->head;
+    if ((*list)->len == 0) return;
+    now = (*list)->head;
     next = now->next;
     for (;;)
     {
@@ -31,20 +31,22 @@ free_blist(struct Blist *list, void (*liberator)(void *))
         now = next;
         next = next->next;
     }
+    free(*list);
+    *list = NULL;
 }
 
 int
-count_blist(const struct Blist *list)
+count_list(const List *list)
 {
     return list->len;
 }
 
 void
-add_blist(struct Blist *list, void *data)
+add_list(List *list, void *data)
 {
-    struct Blist_body *newbody;
+    struct List_body *newbody;
 
-    newbody = (struct Blist_body*)malloc(sizeof(struct Blist_body));
+    newbody = (struct List_body*)malloc(sizeof(struct List_body));
     newbody->prev = newbody->next = NULL;
     newbody->data = data;
 
@@ -62,9 +64,9 @@ add_blist(struct Blist *list, void *data)
 }
 
 bool
-remove_blist(struct Blist *list, void (*liberator)(void *), int n)
+remove_list(List *list, void (*liberator)(void *), int n)
 {
-    struct Blist_body *b;
+    struct List_body *b;
     
     if (n >= list->len) return false;
     if (list->len == 1)
@@ -131,9 +133,9 @@ remove_blist(struct Blist *list, void (*liberator)(void *), int n)
 }
 
 bool
-remove_blist2(struct Blist *list, int (*cmp)(void*, void*), void (*liberator)(void*), void *data)
+remove_list2(List *list, int (*cmp)(void*, void*), void (*liberator)(void*), void *data)
 {
-    struct Blist_body *b;
+    struct List_body *b;
 
     for (b = list->head;;)
     {
@@ -171,9 +173,9 @@ remove_blist2(struct Blist *list, int (*cmp)(void*, void*), void (*liberator)(vo
 }
 
 void *
-at_blist(struct Blist *list, int n)
+at_list(List *list, int n)
 {
-    struct Blist_body *b;
+    struct List_body *b;
 
     if (n >= list->len) return NULL;
 
@@ -198,32 +200,32 @@ at_blist(struct Blist *list, int n)
 }
 
 void
-init_iterator_blist(const struct Blist *list, struct iterator_blist *iter)
+init_iter_list(const List *list, iter_list *iter)
 {
     iter->p = list->head;
 }
 
 bool
-isend_iterator_blist(const struct iterator_blist *iter)
+hasnext_iter_list(const iter_list *iter)
 {
     return iter->p != NULL;
 }
 
 void
-next_iterator_blist(struct iterator_blist *iter)
+next_iter_list(iter_list *iter)
 {
     if (iter->p != NULL) iter->p = iter->p->next;
 }
 
 void *
-value_iterator_blist(const struct iterator_blist *iter)
+value_iter_list(const iter_list *iter)
 {
     return iter->p->data;
 }
 
-#ifdef TEST_BLIST
+#ifdef TEST_LIST
 void
-librator_debug(void *data){}
+librator_void(void *data){}
 
 int
 cmp_debug(void *a, void *b)
@@ -234,82 +236,83 @@ cmp_debug(void *a, void *b)
 int
 main(int argc, char *argv[])
 {
-    struct Blist *list;
-    struct iterator_blist iter;
+    List *list;
+    iter_list iter;
 
-    list = make_blist();
-    add_blist(list, "a");
-    add_blist(list, "b");
-    add_blist(list, "c");
+    list = make_list();
+    add_list(list, "a");
+    add_list(list, "b");
+    add_list(list, "c");
 
     // if correct, print [a, b, c, ]
     fprintf(stderr, "[");
-    for (init_iterator_blist(list, &iter);
-            isend_iterator_blist(&iter);
-            next_iterator_blist(&iter))
+    for (init_iter_list(list, &iter);
+            hasnext_iter_list(&iter);
+            next_iter_list(&iter))
     {
-        fprintf(stderr, "%s, ", (char*)value_iterator_blist(&iter));
+        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
     }
     fprintf(stderr, "]");
 
-    fprintf(stderr, "\n%s\n", (char*)at_blist(list, count_blist(list)-1));
+    // if correct, print c
+    fprintf(stderr, "\n%s\n", (char*)at_list(list, count_list(list)-1));
 
     // if correct, print [a, c, ]
     fprintf(stderr, "[");
-    remove_blist(list, librator_debug, 1);
-    for (init_iterator_blist(list, &iter);
-            isend_iterator_blist(&iter);
-            next_iterator_blist(&iter))
+    remove_list(list, librator_void, 1);
+    for (init_iter_list(list, &iter);
+            hasnext_iter_list(&iter);
+            next_iter_list(&iter))
     {
-        fprintf(stderr, "%s, ", (char*)value_iterator_blist(&iter));
+        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
     }
     fprintf(stderr, "]");
 
     // if correct, print [a, ]
     fprintf(stderr, "[");
-    remove_blist(list, librator_debug, 1);
-    for (init_iterator_blist(list, &iter);
-            isend_iterator_blist(&iter);
-            next_iterator_blist(&iter))
+    remove_list(list, librator_void, 1);
+    for (init_iter_list(list, &iter);
+            hasnext_iter_list(&iter);
+            next_iter_list(&iter))
     {
-        fprintf(stderr, "%s, ", (char*)value_iterator_blist(&iter));
+        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
     }
     fprintf(stderr, "]");
 
     // if correct, print []
     fprintf(stderr, "[");
-    remove_blist(list, librator_debug, 0);
-    for (init_iterator_blist(list, &iter);
-            isend_iterator_blist(&iter);
-            next_iterator_blist(&iter))
+    remove_list(list, librator_void, 0);
+    for (init_iter_list(list, &iter);
+            hasnext_iter_list(&iter);
+            next_iter_list(&iter))
     {
-        fprintf(stderr, "%s, ", (char*)value_iterator_blist(&iter));
+        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
     }
     fprintf(stderr, "]");
 
     // if correct, print [test, ]
     fprintf(stderr, "[");
-    add_blist(list, "test");
-    for (init_iterator_blist(list, &iter);
-            isend_iterator_blist(&iter);
-            next_iterator_blist(&iter))
+    add_list(list, "test");
+    for (init_iter_list(list, &iter);
+            hasnext_iter_list(&iter);
+            next_iter_list(&iter))
     {
-        fprintf(stderr, "%s, ", (char*)value_iterator_blist(&iter));
+        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
     }
     fprintf(stderr, "]");
 
     // if correct, print []
     fprintf(stderr, "[");
-    remove_blist2(list, cmp_debug, librator_debug, "test");
-    for (init_iterator_blist(list, &iter);
-            isend_iterator_blist(&iter);
-            next_iterator_blist(&iter))
+    remove_list2(list, cmp_debug, librator_void, "test");
+    for (init_iter_list(list, &iter);
+            hasnext_iter_list(&iter);
+            next_iter_list(&iter))
     {
-        fprintf(stderr, "%s, ", (char*)value_iterator_blist(&iter));
+        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
     }
     fprintf(stderr, "]");
     
-    free_blist(list, librator_debug);
+    free_list(&list, librator_void);
 
     fprintf(stderr, "\n");
 

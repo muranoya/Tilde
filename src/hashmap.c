@@ -2,34 +2,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "hashmap.h"
-
-struct container
-{
-    char *key;
-    void *data;
-    struct container *next;
-};
-
-struct list
-{
-    struct container *head;
-    struct container *tail;
-    int len;
-};
+#include "tilde.h"
 
 static unsigned int calc_hash(unsigned int size, const char *key);
-static void free_list(struct list *list, void (*)(void*));
+static void free_hashmaplist(struct hashmap_list *list, void (*)(void*));
 
-struct Hashmap *
-make_hashmap(unsigned int size)
+Hashmap *
+make_hashmap(int size)
 {
-    struct Hashmap *hmap;
-    struct list *list;
+    Hashmap *hmap;
+    struct hashmap_list *list;
     int i;
 
-    hmap = (struct Hashmap*)malloc(sizeof(struct Hashmap));
-    hmap->list = (struct list*)malloc(sizeof(struct list)*size);
+    if (size <= 0)
+    {
+        return NULL;
+    }
+    hmap = (Hashmap*)malloc(sizeof(Hashmap));
+    hmap->list = (struct hashmap_list*)malloc(sizeof(struct hashmap_list)*size);
     hmap->size = size;
 
     for (i = 0; i < size; ++i)
@@ -42,31 +32,35 @@ make_hashmap(unsigned int size)
 }
 
 void
-free_hashmap(struct Hashmap *hmap, void (*liberator)(void*))
+free_hashmap(Hashmap **hmap, void (*liberator)(void*))
 {
     int i;
-    for (i = 0; i < hmap->size; ++i)
+    for (i = 0; i < (*hmap)->size; ++i)
     {
-        free_list(hmap->list+i, liberator);
+        free_hashmaplist((*hmap)->list+i, liberator);
     }
-    free(hmap->list);
-    free(hmap);
+    free((*hmap)->list);
+    free(*hmap);
+    *hmap = NULL;
 }
 
 bool
-add_hashmap(struct Hashmap *hmap, const char *key, void *data)
+add_hashmap(Hashmap *hmap, const char *key, void *data)
 {
     unsigned int hash;
-    struct container *container;
-    struct list *list;
+    struct hashmap_container *container;
+    struct hashmap_list *list;
+    char *new_key;
     
     if (exists_hashmap(hmap, key)) return false;
 
     hash = calc_hash(hmap->size, key);
-    container = (struct container *)malloc(sizeof(struct container));
+    container = (struct hashmap_container *)malloc(sizeof(struct hashmap_container));
     list = hmap->list+hash;
 
-    container->key = newString(key);
+    new_key = (char*)malloc(sizeof(char)*(strlen(key)+1));
+    strcpy(new_key, key);
+    container->key = new_key;
     container->data = data;
     container->next = NULL;
 
@@ -85,11 +79,11 @@ add_hashmap(struct Hashmap *hmap, const char *key, void *data)
 }
 
 bool
-remove_hashmap(struct Hashmap *hmap, const char *key, void (*liberator)(void*))
+remove_hashmap(Hashmap *hmap, const char *key, void (*liberator)(void*))
 {
     unsigned int hash = calc_hash(hmap->size, key);
-    struct list *list;
-    struct container *now, *prev = NULL;
+    struct hashmap_list *list;
+    struct hashmap_container *now, *prev = NULL;
 
     list = hmap->list+hash;
     now = list->head;
@@ -113,16 +107,16 @@ remove_hashmap(struct Hashmap *hmap, const char *key, void (*liberator)(void*))
 }
 
 bool
-exists_hashmap(struct Hashmap *hmap, const char *key)
+exists_hashmap(Hashmap *hmap, const char *key)
 {
     return search_hashmap(hmap, key) != NULL;
 }
 
 void *
-search_hashmap(struct Hashmap *hmap, const char *key)
+search_hashmap(Hashmap *hmap, const char *key)
 {
     unsigned int hash = calc_hash(hmap->size, key);
-    struct container *container = (hmap->list+hash)->head;
+    struct hashmap_container *container = (hmap->list+hash)->head;
 
     for (;;)
     {
@@ -152,9 +146,9 @@ calc_hash(unsigned int size, const char *key)
 }
 
 static void
-free_list(struct list *list, void (*liberator)(void*))
+free_hashmaplist(struct hashmap_list *list, void (*liberator)(void*))
 {
-    struct container *now, *next;
+    struct hashmap_container *now, *next;
     
     if (list->len == 0) return;
     now = list->head;
@@ -173,7 +167,7 @@ free_list(struct list *list, void (*liberator)(void*))
 
 #ifdef TEST_HASHMAP
 static int
-count(const struct Hashmap *hmap)
+count(const Hashmap *hmap)
 {
     int s, i;
     for (s = i = 0; i < hmap->size; ++i)
@@ -184,10 +178,10 @@ count(const struct Hashmap *hmap)
 }
 
 static void
-debug_print(const struct Hashmap *hmap)
+debug_print(const Hashmap *hmap)
 {
-    struct list *list;
-    struct container *container;
+    struct hashmap_list *list;
+    struct hashmap_container *container;
     int i;
     for (i = 0; i < hmap->size; ++i)
     {
@@ -220,7 +214,7 @@ liberator_int(void *data)
 int
 main(int argc, char *argv[])
 {
-    struct Hashmap *map;
+    Hashmap *map;
     const int BUFSIZE = 128;
     char buf[BUFSIZE], key[BUFSIZE];
     int val, *valp, size;
@@ -298,7 +292,7 @@ main(int argc, char *argv[])
         }
         else
         {
-            free_hashmap(map, liberator_int);
+            free_hashmap(&map, liberator_int);
             return EXIT_SUCCESS;
         }
     }
