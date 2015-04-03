@@ -5,7 +5,6 @@
 
 #include "tilde.h"
 
-#define IDENT_MAXSIZE (256)
 #define STACK_SIZE (8)
 
 static FILE *file = NULL;
@@ -285,10 +284,12 @@ make_digit(Token *tk, int c)
         c = nextchar();
         if (c == 'x' || c == 'X')
         {
+            append3_string(val, "0x");
             ret = make_digit_base(tk, nextchar(), 16, val);
         }
         else
         {
+            append2_string(val, '0');
             ret = make_digit_base(tk, c, 8, val);
         }
     }
