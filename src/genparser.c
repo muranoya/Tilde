@@ -4,6 +4,7 @@
 
 #include "tilde.h"
 
+// To change depending on the size of the grammar.
 #define RULE_SIZE (256)
 
 enum BNFKind
@@ -54,6 +55,7 @@ static Factor *find_initial_state();
 static void    liberator_void(void*);
 static void    calc_canonical_automaton();
 static List   *calc_closure(LR1term *term);
+static void    calc_closure_rec(List *set, LR1term *term);
 static LR1term*make_LR1term(List *rule, Factor *la, int d);
 static Factor *get_dot_factor(const LR1term *term);
 static void    print_LR1set(List *set);
@@ -196,7 +198,7 @@ print_rules()
             f = (Factor*)value_iter_list(&iter);
             printf("%s(%s) ", f->str->str, f->kind == TERM ? "TERM" : "NONTERM");
         }
-        printf("\n\n");
+        printf("\n");
     }
 }
 
@@ -239,8 +241,6 @@ find_initial_state()
             f = (Factor*)value_iter_list(&iter);
             if (f->kind == NONTERM && strcmp(f->str->str, left->str) != 0)
             {
-                if (strcmp(f->str->str, "translation_unit") == 0)
-                    printf("DEBUG\n");
                 *((char*)search_hashmap(hash, f->str)) = 1;
             }
         }
@@ -285,7 +285,7 @@ calc_canonical_automaton()
     List *initrule;
     LR1term *term;
 
-    printf("Initial state: %s\n", initialstate->str->str);
+    printf("\nInitial state: %s\n", initialstate->str->str);
 
     initrule = make_list();
     add_list(initrule, &start_rule);
@@ -293,6 +293,7 @@ calc_canonical_automaton()
 
     term = make_LR1term(initrule, &end_rule, 0);
 
+    puts("");
     print_LR1set(calc_closure(term));
 }
 
@@ -301,22 +302,41 @@ static List*
 calc_closure(LR1term *term)
 {
     List *set;
-    int i;
-    Factor *f;
 
     set = make_list();
     add_list(set, term);
+    calc_closure_rec(set, term);
+
+    return set;
+}
+
+static void
+calc_closure_rec(List *set, LR1term *term)
+{
+    Factor *lkeyword;
+    Factor *dotfactor;
+    Factor *new_dotfactor;
+    LR1term *new_lr1term;
+    int i;
+
+    dotfactor = get_dot_factor(term);
+    if (dotfactor != NULL && dotfactor->kind != NONTERM) return;
 
     for (i = 0; rules[i] != NULL; ++i)
     {
-        f = (Factor*)at_list(rules[i], 0);
-        if (strcmp(f->str->str, get_dot_factor(term)->str->str) == 0)
+        lkeyword = (Factor*)at_list(rules[i], 0);
+        if (strcmp(lkeyword->str->str, dotfactor->str->str) == 0)
         {
-            add_list(set, make_LR1term(rules[i], term->lookahed, term->dot));
+            new_lr1term = make_LR1term(rules[i], term->lookahed, term->dot);
+            add_list(set, new_lr1term);
+            new_dotfactor = get_dot_factor(new_lr1term);
+            if (new_dotfactor != NULL && strcmp(new_dotfactor->str->str,
+                       ((Factor*)at_list(new_lr1term->rule, 0))->str->str) != 0)
+            {
+                calc_closure_rec(set, new_lr1term);
+            }
         }
     }
-
-    return set;
 }
 
 static LR1term *
@@ -359,7 +379,7 @@ print_LR1set(List *set)
             if (i == dot) printf(" @ ");
             printf("%s ", ((Factor*)value_iter_list(&iter2))->str->str);
         }
-        printf("%s]\n", term->lookahed->str->str);
+        printf(", %s]\n", term->lookahed->str->str);
     }
 }
 
