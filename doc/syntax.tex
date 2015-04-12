@@ -22,10 +22,10 @@ token:\\
 \it
 \noindent
 keywords: {\rm one of}\\
-\|    | \verb+enum unsigned break return void case float+ \\
-\|    | \verb+short char for signed while const goto sizeof+ \\
-\|    | \verb+bool continue if static default struct do+ \\
-\|    | \verb+int switch double long typedef else union inline extern+ \\
+\|    | \verb+enum break return void case float volatile+ \\
+\|    | \verb+short ushort char uchar for while const goto sizeof+ \\
+\|    | \verb+bool continue if static default struct do true false+ \\
+\|    | \verb+int uint switch double long ulong typedef else union inline extern+ \\
 
 \rm
 \section{Identifiers}
@@ -374,13 +374,15 @@ storage-class-specifier:\\
 type-specifier:\\
 \|    | \verb+void+\\
 \|    | \verb+char+\\
+\|    | \verb+uchar+\\
 \|    | \verb+short+\\
+\|    | \verb+ushort+\\
 \|    | \verb+int+\\
+\|    | \verb+uint+\\
 \|    | \verb+long+\\
+\|    | \verb+ulong+\\
 \|    | \verb+float+\\
 \|    | \verb+double+\\
-\|    | \verb+signed+\\
-\|    | \verb+unsigned+\\
 \|    | \verb+bool+\\
 \|    | struct-or-union-specifier\\
 \|    | enum-specifier\\
@@ -403,12 +405,11 @@ struct-declaration-list:\\
 
 \noindent
 struct-declaration:\\
-\|    | specifier-qualifier-list struct-declarator-list \verb+;+\\
+\|    | specifier-qualifier struct-declarator-list \verb+;+\\
 
 \noindent
-specifier-qualifier-list:\\
-\|    | type-specifier specifier-qualifier-list\opt\\
-\|    | type-qualifier specifier-qualifier-list\opt\\
+specifier-qualifier:\\
+\|    | type-qualifier\opt type-specifier\\
 
 \noindent
 struct-declarator-list:\\
@@ -438,6 +439,7 @@ enumerator:\\
 \noindent
 type-qualifier:\\
 \|    | \verb+const+\\
+\|    | \verb+volatile+\\
 
 \noindent
 function-specifier:\\
@@ -455,8 +457,7 @@ direct-declarator:\\
 \|    | direct-declarator \verb+[+ \verb+static+ type-qualifier-list\opt assignment-expression \verb+]+\\
 \|    | direct-declarator \verb+[+ type-qualifier-list \verb+static+ assignment-expression \verb+]+\\
 \|    | direct-declarator \verb+[+ type-qualifier-list\opt \verb+*+ \verb+]+\\
-\|    | direct-declarator \verb+(+ perameter-type-list \verb+)+\\
-\|    | direct-declarator \verb+(+ identifier-list\opt \verb+)+\\
+\|    | direct-declarator \verb+(+ parameter-type-list\opt \verb+)+\\
 
 \noindent
 pointer:\\
@@ -484,13 +485,8 @@ parameter-declaration:\\
 \|    | declaration-specifiers abstract-declarator\opt\\
 
 \noindent
-identifier-list:\\
-\|    | identifier\\
-\|    | identifier-list \verb+,+ identifier\\
-
-\noindent
 type-name:\\
-\|    | specifier-qualifier-list abstract-declarator\opt\\
+\|    | specifier-qualifier abstract-declarator\opt\\
 
 \noindent
 abstract-declarator:\\
@@ -603,7 +599,7 @@ external-declaration:\\
 
 \noindent
 function-definition:\\
-\|    | declaration-specifiers declarator declaration-list\opt compound-statement\\
+\|    | declaration-specifiers declarator compound-statement\\
 
 \noindent
 declaration-list:\\

@@ -8,21 +8,22 @@
 #define STACK_SIZE (8)
 
 static FILE *file = NULL;
-static bool autoclose;
 static int line, column;
 
-static int stack[STACK_SIZE], sp;
+static int char_stack[STACK_SIZE], sp;
 
 static char *keywords[] =
 {
-    "enum",   "unsigned", "break",  "return",  "void",     "case",
-    "float",  "short",    "char",   "for",     "signed",   "while",
-    "const",  "goto",     "sizeof", "bool",    "continue", "if",
-    "static", "default",  "inline", "struct",  "do",       "int",
-    "switch", "double",   "long",   "typedef", "else",     "union",
-    "extern",
+    "enum",   "break",   "return", "void",   "case",     "float",
+    "short",  "ushort",  "char",   "uchar",  "for",      "while",
+    "const",  "goto",    "sizeof", "bool",   "continue", "if",
+    "static", "default", "inline", "struct", "do",       "int",
+    "uint",   "switch",  "double", "long",   "ulong",    "typedef",
+    "else",   "union",   "extern", "true",   "false",    "volatile",
     0,
 };
+
+static Token *endtoken = &(Token){.kind = TK_ENDFILE, .str = NULL};
 
 /* prototype */
 static bool make_ident(Token *tk, int c);
@@ -45,10 +46,9 @@ static void pushback(int c);
 static int  nextchar();
 
 bool
-open_file(const char *f, bool ac)
+open_file(const char *f)
 {
     file = fopen(f, "r");
-    autoclose = ac;
     if (file == NULL)
     {
         perror("fopen");
@@ -63,6 +63,7 @@ open_file(const char *f, bool ac)
 void
 close_file()
 {
+    if (file == NULL) return;
     if (fclose(file) != 0) perror("fclose");
     file = NULL;
 }
@@ -71,6 +72,7 @@ void
 print_token(const Token *tk)
 {
     char *p;
+    char *s;
     switch (tk->kind)
     {
     case TK_IDENT:      p = "IDENT";      break;
@@ -81,12 +83,10 @@ print_token(const Token *tk)
     case TK_ENDFILE:    p = "ENDFILE";    break;
     default:            p = "UNKNOWN";    break;
     }
+
+    s = (tk->kind == TK_PUNCTUATOR || tk->kind == TK_ENDFILE) ? "" : tk->str->str;
     printf("%s (%d:%d)%s\n",
-            p,
-            tk->row,
-            tk->col,
-            tk->kind == TK_PUNCTUATOR ? punctuator_to_string(tk->id)
-                                      : tk->str->str);
+            p, tk->row, tk->col, s);
 }
 
 char *
@@ -144,11 +144,13 @@ punctuator_to_string(enum PnctID p)
     }
 }
 
-void
-next_token(Token *token)
+Token *
+next_token()
 {
+    Token *token;
     int c;
     skip();
+    token = (Token*)malloc(sizeof(Token));
     c = nextchar();
 
     token->kind = TK_INVALID;
@@ -160,17 +162,17 @@ next_token(Token *token)
     if (is_nondigit(c))
     {
         make_ident(token, c);
-        return;
+        return token;
     }
     else if (is_digit(c, 10))
     {
         make_digit(token, c);
-        return;
+        return token;
     }
     else if (c == '"')
     {
         make_string_literal(token);
-        return;
+        return token;
     }
     else if (c == '\'')
     {
@@ -198,7 +200,7 @@ next_token(Token *token)
             append2_string(p, c);
         }
         estimate('\'');
-        return;
+        return token;
     }
     else if (c == '.')
     {
@@ -212,7 +214,7 @@ next_token(Token *token)
             token->col = column-1;
             token->str = p;
             make_float_base('.', 10, p);
-            return;
+            return token;
         }
         else
         {
@@ -221,16 +223,15 @@ next_token(Token *token)
     }
     else if (c == EOF)
     {
-        token->kind = TK_ENDFILE;
-        token->row = line;
-        token->col = column;
-        token->str = NULL;
-        return;
+        endtoken->row = line;
+        endtoken->col = column;
+        free_token(&token);
+        return endtoken;
     }
-
+    
     if (make_punctuator(token, c))
     {
-        return;
+        return token;
     }
     else
     {
@@ -239,6 +240,15 @@ next_token(Token *token)
 
     fprintf(stderr, "Error:%d:%d: Invalid token.\n", line, column);
     exit(EXIT_FAILURE);
+}
+
+void
+free_token(Token **tk)
+{
+    if ((*tk)->kind == TK_ENDFILE) return;
+    free_string(&(*tk)->str);
+    free(*tk);
+    *tk = NULL;
 }
 
 static bool
@@ -701,7 +711,7 @@ pushback(int c)
                 line, column);
         exit(EXIT_FAILURE);
     }
-    stack[sp++] = c;
+    char_stack[sp++] = c;
 }
 
 static int
@@ -709,12 +719,12 @@ nextchar()
 {
     int c;
 
-    if (sp > 0) return stack[--sp];
+    if (sp > 0) return char_stack[--sp];
     
     c = (file == NULL) ? EOF : fgetc(file);
     if (c == EOF)
     {
-        if (autoclose) close_file();
+        close_file();
     }
     else if (c == '\n')
     {
@@ -732,16 +742,21 @@ nextchar()
 int
 main(int argc, char *argv[])
 {
-    Token token;
+    Token *token;
+    int i;
 
     if (argc != 2) exit(EXIT_FAILURE);
 
-    open_file(argv[1], 1);
-    for (;;) 
+    open_file(argv[1]);
+    for (i = 0;;) 
     {
-        next_token(&token);
-        if (token.kind == TK_ENDFILE) break;
-        print_token(&token);
+        token = next_token();
+        if (token->kind == TK_ENDFILE)
+        {
+            if (i++ == 4) break;
+        }
+        print_token(token);
+        free_token(&token);
     }
     return EXIT_SUCCESS;
 }
