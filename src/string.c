@@ -37,6 +37,7 @@ new2_string(const char *str)
 void
 free_string(String **string)
 {
+    if (*string == NULL) return;
     free((*string)->str);
     free(*string);
     *string = NULL;
