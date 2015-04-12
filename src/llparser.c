@@ -33,6 +33,9 @@ static void make_direct_declarator(Node *node);
 static bool make_type_qual_list(bool *isc, bool *isv);
 static Node *make_assignment_exp();
 static List *make_parameter_type_list();
+static Node *make_parameter_list();
+static Node *make_parameter_decl();
+static Type *ret_type_tail(Type *t);
 
 static Node *malloc_node(enum AST ast);
 static Type *malloc_type(enum TypeType tt);
@@ -339,73 +342,19 @@ make_declarator(Node *node)
     
     if (ptr_head == NULL)
     {
-        Type *temp_head;
-        Type *temp_tail;
-
-        temp_head = node->type;
-        for (temp_tail = temp_head;;)
-        {
-            if (temp_tail == NULL) break;
-            else if (temp_tail->tt == TT_FUNCTION)
-            {
-                if (temp_tail->ret == NULL) break;
-                temp_tail = temp_tail->ret;
-            }
-            else if (temp_tail->tt == TT_POINTER)
-            {
-                if (temp_tail->ptr == NULL) break;
-                temp_tail = temp_tail->ptr;
-            }
-            else if (temp_tail->tt == TT_ARRAY)
-            {
-                if (temp_tail->base == NULL) break;
-                temp_tail = temp_tail->base;
-            }
-        }
-        if (temp_tail == NULL)
-        {
-            node->type = temp;
-        }
-        else if (temp_tail->tt == TT_FUNCTION)
-        {
-            temp_tail->ret = temp;
-        }
-        else if (temp_tail->tt == TT_POINTER)
-        {
-            temp_tail->ptr = temp;
-        }
-        else if (temp_tail->tt == TT_ARRAY)
-        {
-            temp_tail->base = temp;
-        }
+        Type *temp_tail = ret_type_tail(node->type);
+        if (temp_tail == NULL) node->type = temp;
+        else if (temp_tail->tt == TT_FUNCTION) temp_tail->ret = temp;
+        else if (temp_tail->tt == TT_POINTER)  temp_tail->ptr = temp;
+        else if (temp_tail->tt == TT_ARRAY)    temp_tail->base = temp;
     }
     else
     {
         Type *ptr_tail;
-        Type *temp_head;
         Type *temp_tail;
         for (ptr_tail = ptr_head; ptr_tail->ptr != NULL;)
             ptr_tail = ptr_tail->ptr;
-        temp_head = node->type;
-        for (temp_tail = temp_head;;)
-        {
-            if (temp_tail == NULL) break;
-            else if (temp_tail->tt == TT_FUNCTION)
-            {
-                if (temp_tail->ret == NULL) break;
-                temp_tail = temp_tail->ret;
-            }
-            else if (temp_tail->tt == TT_POINTER)
-            {
-                if (temp_tail->ptr == NULL) break;
-                temp_tail = temp_tail->ptr;
-            }
-            else if (temp_tail->tt == TT_ARRAY)
-            {
-                if (temp_tail->base == NULL) break;
-                temp_tail = temp_tail->base;
-            }
-        }
+        temp_tail = ret_type_tail(node->type);
         if (temp_tail == NULL)
         {
             node->type = ptr_head;
@@ -498,49 +447,15 @@ make_direct_declarator(Node *node)
     tk = next();
     if (is_puncid(tk, P_PAREN_L))
     {
-        Type *t;
-        Type *temp_head;
-        Type *temp_tail;
-
+        Type *t, *temp_tail;
         t = malloc_type(TT_FUNCTION);
         t->args = make_parameter_type_list();
         
-        temp_head = node->type;
-        for (temp_tail = temp_head;;)
-        {
-            if (temp_tail == NULL) break;
-            else if (temp_tail->tt == TT_FUNCTION)
-            {
-                if (temp_tail->ret == NULL) break;
-                temp_tail = temp_tail->ret;
-            }
-            else if (temp_tail->tt == TT_POINTER)
-            {
-                if (temp_tail->ptr == NULL) break;
-                temp_tail = temp_tail->ptr;
-            }
-            else if (temp_tail->tt == TT_ARRAY)
-            {
-                if (temp_tail->base == NULL) break;
-                temp_tail = temp_tail->base;
-            }
-        }
-        if (temp_tail == NULL)
-        {
-            node->type = t;
-        }
-        else if (temp_tail->tt == TT_FUNCTION)
-        {
-            temp_tail->ret = t;
-        }
-        else if (temp_tail->tt == TT_POINTER)
-        {
-            temp_tail->ptr = t;
-        }
-        else if (temp_tail->tt == TT_ARRAY)
-        {
-            temp_tail->base = t;
-        }
+        temp_tail = ret_type_tail(node->type);
+        if (temp_tail == NULL) node->type = t;
+        else if (temp_tail->tt == TT_FUNCTION) temp_tail->ret = t;
+        else if (temp_tail->tt == TT_POINTER)  temp_tail->ptr = t;
+        else if (temp_tail->tt == TT_ARRAY)    temp_tail->base = t;
 
         free_token(&tk);
         tk = next();
@@ -554,62 +469,12 @@ make_direct_declarator(Node *node)
             // error
         }
     }
-    /*
     else if (is_puncid(tk, P_SQR_BRCK_L))
     {
-        Type *t;
-
-        t = malloc_type(TT_ARRAY);
-
-        free_token(&tk);
-        tk = next();
-        if (is_keyword(tk, "static"))
-        {
-            free_token(&tk);
-            t->is_static = true;
-            make_type_qual_list(tc);
-            t->asn_exp = make_assignment_exp();
-            node->tc = tc;
-            return node;
-        }
-        else
-        {
-            pushback(tk);
-            if (make_type_qual_list())
-            {
-                // 1. type-qualifier-list(opt) assignment-exp(opt)
-                // 2. type-qualifier-list static assignment-exp
-                // 3. type-qualifier-list(opt) *
-                tk = next();
-                if (is_keyword(tk, "static"))
-                {
-                    // 2. type-qualifier-list static assignment-exp
-                    free_token(&tk);
-                    make_assignment_exp();
-                }
-                else if (is_puncid(tk, P_MULT))
-                {
-                    // 3. type-qualifier-list(opt) *
-                    free_token(&tk);
-                }
-                else
-                {
-                    pushback(tk);
-                }
-            }
-            else
-            {
-                tk = next();
-                if (is_puncid(tk, P_MULT))
-                {
-                }
-                make_assignment_exp();
-            }
-        }
     }
-    */
     else
     {
+        pushback(tk);
         return;
     }
 }
@@ -644,6 +509,35 @@ make_parameter_list()
 static Node *
 make_parameter_decl()
 {
+}
+
+static Type *
+ret_type_tail(Type *t)
+{
+    Type *temp_head;
+    Type *temp_tail;
+
+    temp_head = t;
+    for (temp_tail = temp_head;;)
+    {
+        if (temp_tail == NULL) break;
+        else if (temp_tail->tt == TT_FUNCTION)
+        {
+            if (temp_tail->ret == NULL) break;
+            temp_tail = temp_tail->ret;
+        }
+        else if (temp_tail->tt == TT_POINTER)
+        {
+            if (temp_tail->ptr == NULL) break;
+            temp_tail = temp_tail->ptr;
+        }
+        else if (temp_tail->tt == TT_ARRAY)
+        {
+            if (temp_tail->base == NULL) break;
+            temp_tail = temp_tail->base;
+        }
+    }
+    return temp_tail;
 }
 
 static Node *
