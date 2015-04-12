@@ -124,13 +124,18 @@ void    append2_string(String *dst, char c);
 void    append3_string(String *dst, const char *src);
 
 // list.c
+void  liberator_void(void *);
 List *make_list();
 void  free_list(List **list, void (*liberator)(void*));
 int   count_list(const List *list);
 void  add_list(List *list, void *data);
 bool  remove_list(List *list, void (*liberator)(void*), int n);
-bool  remove_list2(List *list, int (*cmp)(void*, void*), void (*liberator)(void*), void *data);
+bool  remove_cmp_list(List *list,
+        int (*cmp)(void*, void*),
+        void (*liberator)(void*), void *data);
 void  *at_list(List *list, int n);
+void  *pop_list(List *list);
+void  *dequeue_list(List *list);
 void  init_iter_list(const List *list, iter_list *iter);
 bool  hasnext_iter_list(const iter_list *iter);
 void  next_iter_list(iter_list *iter);

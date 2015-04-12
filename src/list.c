@@ -11,6 +11,8 @@ struct List_body
     void *data;
 };
 
+void liberator_void(void *data) { }
+
 List *
 make_list()
 {
@@ -140,7 +142,9 @@ remove_list(List *list, void (*liberator)(void *), int n)
 }
 
 bool
-remove_list2(List *list, int (*cmp)(void*, void*), void (*liberator)(void*), void *data)
+remove_cmp_list(List *list,
+        int (*cmp)(void*, void*),
+        void (*liberator)(void*), void *data)
 {
     struct List_body *b;
 
@@ -206,6 +210,34 @@ at_list(List *list, int n)
     }
 }
 
+void *
+pop_list(List *list)
+{
+    void *ret;
+    int len;
+
+    len = count_list(list);
+    if (len == 0) return NULL;
+
+    ret = at_list(list, len-1);
+    remove_list(list, liberator_void, len-1);
+    return ret;
+}
+
+void *
+dequeue_list(List *list)
+{
+    void *ret;
+    int len;
+
+    len = count_list(list);
+    if (len == 0) return NULL;
+
+    ret = at_list(list, 0);
+    remove_list(list, liberator_void, 0);
+    return ret;
+}
+
 void
 init_iter_list(const List *list, iter_list *iter)
 {
@@ -231,20 +263,31 @@ value_iter_list(const iter_list *iter)
 }
 
 #ifdef TEST_LIST
-void
-librator_void(void *data){}
-
 int
 cmp_debug(void *a, void *b)
 {
     return strcmp((char*)a, (char*)b);
 }
 
+void
+debug_print(const List *list)
+{
+    iter_list iter;
+
+    printf("[");
+    for (init_iter_list(list, &iter);
+            hasnext_iter_list(&iter);
+            next_iter_list(&iter))
+    {
+        printf("%s, ", (char*)value_iter_list(&iter));
+    }
+    printf("]\n");
+}
+
 int
 main(int argc, char *argv[])
 {
     List *list;
-    iter_list iter;
 
     list = make_list();
     add_list(list, "a");
@@ -252,74 +295,38 @@ main(int argc, char *argv[])
     add_list(list, "c");
 
     // if correct, print [a, b, c, ]
-    fprintf(stderr, "[");
-    for (init_iter_list(list, &iter);
-            hasnext_iter_list(&iter);
-            next_iter_list(&iter))
-    {
-        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
-    }
-    fprintf(stderr, "]");
+    debug_print(list);
 
     // if correct, print c
-    fprintf(stderr, "\n%s\n", (char*)at_list(list, count_list(list)-1));
+    printf("%s\n", (char*)at_list(list, count_list(list)-1));
 
-    // if correct, print [a, c, ]
-    fprintf(stderr, "[");
-    remove_list(list, librator_void, 1);
-    for (init_iter_list(list, &iter);
-            hasnext_iter_list(&iter);
-            next_iter_list(&iter))
-    {
-        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
-    }
-    fprintf(stderr, "]");
+    // if correct, print c
+    printf("%s\n", (char*)pop_list(list));
+    // if correct, print [a, b, ]
+    debug_print(list);
 
-    // if correct, print [a, ]
-    fprintf(stderr, "[");
-    remove_list(list, librator_void, 1);
-    for (init_iter_list(list, &iter);
-            hasnext_iter_list(&iter);
-            next_iter_list(&iter))
-    {
-        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
-    }
-    fprintf(stderr, "]");
+    // if correct, print a
+    printf("%s\n", (char*)dequeue_list(list));
+    // if correct, print [b, ]
+    debug_print(list);
 
     // if correct, print []
-    fprintf(stderr, "[");
-    remove_list(list, librator_void, 0);
-    for (init_iter_list(list, &iter);
-            hasnext_iter_list(&iter);
-            next_iter_list(&iter))
-    {
-        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
-    }
-    fprintf(stderr, "]");
+    remove_list(list, liberator_void, 0);
+    debug_print(list);
+
+    // if correct, print []
+    remove_list(list, liberator_void, 0);
+    debug_print(list);
 
     // if correct, print [test, ]
-    fprintf(stderr, "[");
     add_list(list, "test");
-    for (init_iter_list(list, &iter);
-            hasnext_iter_list(&iter);
-            next_iter_list(&iter))
-    {
-        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
-    }
-    fprintf(stderr, "]");
+    debug_print(list);
 
     // if correct, print []
-    fprintf(stderr, "[");
-    remove_list2(list, cmp_debug, librator_void, "test");
-    for (init_iter_list(list, &iter);
-            hasnext_iter_list(&iter);
-            next_iter_list(&iter))
-    {
-        fprintf(stderr, "%s, ", (char*)value_iter_list(&iter));
-    }
-    fprintf(stderr, "]");
+    remove_cmp_list(list, cmp_debug, liberator_void, "test");
+    debug_print(list);
     
-    free_list(&list, librator_void);
+    free_list(&list, liberator_void);
 
     fprintf(stderr, "\n");
 
