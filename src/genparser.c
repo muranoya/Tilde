@@ -339,6 +339,26 @@ calc_closure_rec(List *set, LR1term *term)
     }
 }
 
+static List *
+calc_first_set(List *rule)
+{
+    if (count_list(rule) == 1)
+    {
+        return NULL;
+    }
+    else if (((Factor*)at_list(rule, 1))->kind == TERM)
+    {
+        List *ret = make_list();
+        add_list(ret, at_list(rule, 1));
+        return ret;
+    }
+    else
+    {
+        List *ret = make_list();
+        for (
+    }
+}
+
 static LR1term *
 make_LR1term(List *rule, Factor *la, int d)
 {
