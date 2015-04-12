@@ -1,20 +1,23 @@
 CC=cc
 CFLAGS=-O2 -Wall
 
-string: string.c tilde.h
-	$(CC) $(CFLAGS) -o string string.c -DTEST_STRING
+llparser: llparser.c string.c lex.c hashmap.c list.c
+	$(CC) $(CFLAGS) -o llparser $^ -DTEST_LL_PARSER
 
-list: list.c tilde.h
-	$(CC) $(CFLAGS) -o list list.c -DTEST_LIST
+string: string.c
+	$(CC) $(CFLAGS) -o string $^ -DTEST_STRING
 
-hashmap: hashmap.c tilde.h string.c
-	$(CC) $(CFLAGS) -o hashmap hashmap.c string.c -DTEST_HASHMAP
+list: list.c
+	$(CC) $(CFLAGS) -o list $^ -DTEST_LIST
 
-lex: lex.c tilde.h string.c
-	$(CC) $(CFLAGS) -o lex lex.c string.c -DTEST_LEX
+hashmap: hashmap.c string.c
+	$(CC) $(CFLAGS) -o hashmap $^ -DTEST_HASHMAP
 
-genparser: genparser.c tilde.h hashmap.c lex.c list.c string.c
-	$(CC) $(CFLAGS) -o genparser genparser.c hashmap.c list.c string.c lex.c
+lex: lex.c string.c
+	$(CC) $(CFLAGS) -o lex $^ -DTEST_LEX
+
+genparser: genparser.c hashmap.c lex.c list.c string.c
+	$(CC) $(CFLAGS) -o genparser $^
 
 clean:
 

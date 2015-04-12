@@ -107,12 +107,115 @@ typedef struct
     int col;
 } Token;
 
+enum TypeType
+{
+    TT_UNKNOWN,
+    TT_BASIC,
+    TT_STRUCT_UNION,
+    TT_POINTER,
+    TT_ARRAY,
+    TT_FUNCTION,
+};
+
+struct Node;
+
+typedef struct Type
+{
+    int size;
+    int align;
+    bool is_const;
+    bool is_volatile;
+    enum TypeType tt;
+    union
+    {
+        struct /* basic */
+        {
+            bool is_signed;
+        };
+        struct /* struct or union */
+        {
+            bool is_struct;
+            List *contents; // List<Node*>
+        };
+        struct /* function */
+        {
+            struct Type *ret;
+            List *args; // List<Type*>
+            bool is_inline;
+        };
+        struct /* array */
+        {
+            bool is_static; /* only function args */
+            struct Node *asn_exp;
+            struct Type *base;
+        };
+        struct /* pointer */
+        {
+            struct Type *ptr;
+        };
+    };
+} Type;
+
+enum AST
+{
+    AST_UNKNOWN,
+    AST_VAR_DECL,
+    AST_FUNC_DEF,
+};
+
+enum StorageClass
+{
+    SC_NONE,
+    SC_TYPEDEF,
+    SC_EXTERN,
+    SC_STATIC,
+};
+
+typedef struct Node
+{
+    enum AST kind;
+    Type *type;
+    union
+    {
+        struct // var-decl
+        {
+            String *var_name;
+            enum StorageClass sc;
+        };
+        struct // function definition
+        {
+            String *func_name;
+            struct Node *body;
+        };
+        struct // if statement
+        {
+            struct Node *cond;
+            struct Node *true_stat;
+            struct Node *false_stat;
+        };
+        struct // for statement
+        {
+        };
+        struct // while statement
+        {
+        };
+        struct // do statement
+        {
+        };
+    };
+} Node;
+
+// parser.c
+void  init_parser(const char *file);
+List *parser_top();
+
 // lex.c
-bool   open_file(const char *f, int autoclose);
+bool   open_file(const char *f);
 void   close_file();
 void   print_token(const Token *tk);
 char  *punctuator_to_string(enum PnctID p);
-void   next_token(Token *token);
+Token *next_token();
+void   free_token(Token **tk);
 
 // string.c
 String *make_string();
@@ -143,9 +246,10 @@ void *value_iter_list(const iter_list *iter);
 
 // hashmap.c
 Hashmap *make_hashmap(int size);
-void     free_hashmap(Hashmap **h, void (*)(void*));
+void     free_hashmap(Hashmap **h, void (*liberator)(void*));
 bool     add_hashmap(Hashmap *h, const String *key, void *data);
-bool     remove_hashmap(Hashmap *h, const String *key, void (*)(void*));
+bool     remove_hashmap(Hashmap *h, const String *key,
+        void (*liberator)(void*));
 bool     exists_hashmap(Hashmap *h, const String *key);
 void    *search_hashmap(Hashmap *h, const String *key);
 #endif
