@@ -30,6 +30,7 @@ static bool make_func_spec();
 static void make_declarator(Node *node);
 static Type *make_pointer();
 static void make_direct_declarator(Node *node);
+static Type *make_direct_decl_array();
 static bool make_type_qual_list(bool *isc, bool *isv);
 static Node *make_assignment_exp();
 static List *make_parameter_type_list();
@@ -84,17 +85,11 @@ make_extdecl()
 static void
 make_decl_spec(Node *node)
 {
-    Type *type;
-    Type *type_temp;
-    bool is_inline;
-    bool is_const;
-    bool is_volatile;
-
-    type = NULL;
-    type_temp = NULL;
-    is_inline = false;
-    is_const = false;
-    is_volatile = false;
+    Type *type = NULL;
+    Type *type_temp = NULL;
+    bool is_inline = false;
+    bool is_const = false;
+    bool is_volatile = false;
 
     for (;;)
     {
@@ -330,11 +325,9 @@ make_func_spec()
 static void
 make_declarator(Node *node)
 {
-    Type *ptr_head;
-    Type *temp;
+    Type *ptr_head, *temp;
 
     ptr_head = make_pointer();
-
     temp = node->type;
     node->type = NULL;
 
@@ -350,8 +343,7 @@ make_declarator(Node *node)
     }
     else
     {
-        Type *ptr_tail;
-        Type *temp_tail;
+        Type *ptr_tail, *temp_tail;
         for (ptr_tail = ptr_head; ptr_tail->ptr != NULL;)
             ptr_tail = ptr_tail->ptr;
         temp_tail = ret_type_tail(node->type);
@@ -382,13 +374,11 @@ static Type *
 make_pointer()
 {
     Token *tk;
-    Type *type;
-    Type *type_temp;
+    Type *type = NULL;
+    Type *type_temp = NULL;
     bool is_const;
     bool is_volatile;
     
-    type = NULL;
-    type_temp = NULL;
     for (;;)
     {
         is_const = false;
@@ -471,11 +461,79 @@ make_direct_declarator(Node *node)
     }
     else if (is_puncid(tk, P_SQR_BRCK_L))
     {
+        Type *t;
+        t = make_direct_decl_array();
+        free_token(&tk);
+        tk = next();
+        if (is_puncid(tk, P_SQR_BRCK_R))
+        {
+            free_token(&tk);
+            return t;
+        }
+        else
+        {
+            // error
+        }
     }
     else
     {
         pushback(tk);
         return;
+    }
+}
+
+static Type *
+make_direct_decl_array()
+{
+    Token *tk;
+    Type *t;
+    bool isconst = false, isvolatile = false;
+    t = malloc_type(TT_ARRAY);
+    tk = next();
+    if (is_keyword(tk, "static"))
+    {
+        free_token(&tk);
+        make_type_qual_list(&isconst, &isvolatile);
+        t->is_const = isconst;
+        t->is_volatile = isvolatile;
+        t->is_static = true;
+        t->asn_exp = make_assignment_exp();
+        if (t->asn_exp == NULL)
+        {
+            // error
+        }
+        return t;
+    }
+    else
+    {
+        pushback(tk);
+        if (make_type_qual_list(&isconst, &isvolatile))
+        {
+            t->is_const = isconst;
+            t->is_volatile = isvolatile;
+            if (is_keyword(tk, "static"))
+            {
+                t->is_static = true;
+                t->asn_exp = make_assignment_exp();
+                if (t->asn_exp == NULL)
+                {
+                    //error
+                }
+                return t;
+            }
+        }
+        tk = next();
+        if (is_puncid(tk, P_MULT))
+        {
+            free_token(&tk);
+            return t;
+        }
+        else
+        {
+            pushback(tk);
+            t->asn_exp = make_assignment_exp();
+            return t;
+        }
     }
 }
 
