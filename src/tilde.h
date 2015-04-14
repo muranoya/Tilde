@@ -141,11 +141,13 @@ typedef struct Type
         {
             struct Type *ret;
             List *args; // List<Type*>
+            bool is_vargs;
             bool is_inline;
         };
         struct /* array */
         {
             bool is_static; /* only function args */
+            bool is_varg;   /* variable length array */
             struct Node *asn_exp;
             struct Type *base;
         };
@@ -159,8 +161,16 @@ typedef struct Type
 enum AST
 {
     AST_UNKNOWN,
+    AST_IDENT,
+    AST_CONSTANT,
+    AST_STRING,
+
     AST_VAR_DECL,
     AST_FUNC_DEF,
+    AST_IF,
+    AST_FOR,
+    AST_WHILE,
+    AST_DO,
 };
 
 enum StorageClass
@@ -185,22 +195,30 @@ typedef struct Node
         struct // function definition
         {
             String *func_name;
-            struct Node *body;
+            struct Node *func_body;
         };
         struct // if statement
         {
-            struct Node *cond;
+            struct Node *if_exp;
             struct Node *true_stat;
             struct Node *false_stat;
         };
         struct // for statement
         {
+            struct Node *for_init_exp;
+            struct Node *for_cond_exp;
+            struct Node *for_step_exp;
+            struct Node *for_body;
         };
         struct // while statement
         {
+            struct Node *while_cond;
+            struct Node *while_body;
         };
         struct // do statement
         {
+            struct Node *do_cond;
+            struct Node *do_body;
         };
     };
 } Node;

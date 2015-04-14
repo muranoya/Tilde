@@ -18,7 +18,7 @@ Type  *float_t = &(Type){.size = 4, .align = 4, .is_const = false, .is_volatile 
 Type *double_t = &(Type){.size = 8, .align = 8, .is_const = false, .is_volatile = false, .tt = TT_BASIC};
 Type    *ptr_t = &(Type){.size = 8, .align = 8, .is_const = false, .is_volatile = false, .tt = TT_POINTER};
 
-List *stack; // List<Token*>
+static List *stack; // List<Token*>
 
 /* prototypes */
 static Node *make_extdecl();
@@ -62,13 +62,15 @@ parse_top()
 {
     List *list;
     Node *node;
+    Token *tk;
 
     list = make_list();
     for (;;)
     {
         node = make_extdecl();
-        if (node == NULL) return list;
         add_list(list, node);
+        tk = next();
+        if (tk->kind == TK_ENDFILE) return list;
     }
 }
 
@@ -76,11 +78,34 @@ static Node *
 make_extdecl()
 {
     Node *node;
+    Token *tk;
 
     node = malloc_node(AST_VAR_DECL);
     // function-definition/declaration
     make_decl_spec(node);
     make_declarator(node);
+
+    tk = next();
+    if (is_puncid(tk, P_CRL_BRCK_L))
+    {
+        // function definition
+        free_token(&tk);
+    }
+    else
+    {
+        pushback(tk);
+    }
+
+    tk = next();
+    if (is_puncid(tk, P_SCOLON))
+    {
+        free_token(&tk);
+        return;
+    }
+    else
+    {
+        // error
+    }
 
     return node;
 }
@@ -247,12 +272,18 @@ make_type_spec()
     }
     else if (strcmp("struct", p) == 0)
     {
+        Type *struct_type;
         free_token(&tk);
-        return NULL;
+        struct_type = malloc_type(TT_STRUCT_UNION);
+        struct_type->is_struct = true;
+        return struct_type;
     }
     else if (strcmp("union", p) == 0)
     {
+        Type *struct_type;
         free_token(&tk);
+        struct_type = malloc_type(TT_STRUCT_UNION);
+        struct_type->is_struct = false;
         return NULL;
     }
     else if (strcmp("enum", p) == 0)
@@ -429,6 +460,8 @@ make_direct_declarator(Node *node)
     else
     {
         // error
+        pushback(tk);
+        return;
     }
 
     tk = next();
@@ -460,24 +493,35 @@ make_direct_declarator(Node *node)
     else if (is_puncid(tk, P_SQR_BRCK_L))
     {
         Type *t, *temp_tail;
-        t = make_direct_decl_array();
-
-        temp_tail = ret_type_tail(node->type);
-        if (temp_tail == NULL) node->type = t;
-        else if (temp_tail->tt == TT_FUNCTION) temp_tail->ret = t;
-        else if (temp_tail->tt == TT_POINTER)  temp_tail->ptr = t;
-        else if (temp_tail->tt == TT_ARRAY)    temp_tail->base = t;
-
-        free_token(&tk);
-        tk = next();
-        if (is_puncid(tk, P_SQR_BRCK_R))
+        for (;;)
         {
-            free_token(&tk);
-            return;
-        }
-        else
-        {
-            // error
+            if (is_puncid(tk, P_SQR_BRCK_L))
+            {
+                free_token(&tk);
+            }
+            else
+            {
+                pushback(tk);
+                return;
+            }
+            t = make_direct_decl_array();
+
+            temp_tail = ret_type_tail(node->type);
+            if (temp_tail == NULL) node->type = t;
+            else if (temp_tail->tt == TT_FUNCTION) temp_tail->ret = t;
+            else if (temp_tail->tt == TT_POINTER)  temp_tail->ptr = t;
+            else if (temp_tail->tt == TT_ARRAY)    temp_tail->base = t;
+
+            tk = next();
+            if (is_puncid(tk, P_SQR_BRCK_R))
+            {
+                free_token(&tk);
+            }
+            else
+            {
+                // error
+            }
+            tk = next();
         }
     }
     else
@@ -730,7 +774,7 @@ malloc_node(enum AST ast)
         break;
     case AST_FUNC_DEF:
         node->func_name = NULL;
-        node->body = NULL;
+        node->func_body = NULL;
         break;
     }
     return node;
@@ -835,6 +879,7 @@ int
 main(int argc, char *argv[])
 {
     init_parser(argv[1]);
+    parse_top();
     return EXIT_SUCCESS;
 }
 #endif
