@@ -32,11 +32,14 @@ static Type *make_pointer();
 static void make_direct_declarator(Node *node);
 static Type *make_direct_decl_array();
 static bool make_type_qual_list(bool *isc, bool *isv);
-static Node *make_assignment_exp();
-static List *make_parameter_type_list();
-static Node *make_parameter_list();
+static List *make_parameter_type_list(bool *is_vargs);
+static List *make_parameter_list();
 static Node *make_parameter_decl();
 static Type *ret_type_tail(Type *t);
+
+static Node *make_primary_exp();
+static Node *make_assignment_exp();
+static Node *make_exp();
 
 static Node *malloc_node(enum AST ast);
 static Type *malloc_type(enum TypeType tt);
@@ -114,20 +117,14 @@ make_decl_spec(Node *node)
         break;
     }
 
-    if (type == NULL)
-    {
-        // warning. Type specifier missing.
-        type = int_t;
-    }
-
-    if (is_const)    type->is_const = true;
-    if (is_volatile) type->is_volatile = true;
+    if (type == NULL) type = int_t;
+    if (is_const)     type->is_const = true;
+    if (is_volatile)  type->is_volatile = true;
 
     if (is_inline)
     {
         /* only function definition or prototype */
-        Type *t_f;
-        t_f = malloc_type(TT_FUNCTION);
+        Type *t_f = malloc_type(TT_FUNCTION);
         t_f->is_inline = true;
         t_f->ret = type;
         node->type = t_f;
@@ -438,8 +435,9 @@ make_direct_declarator(Node *node)
     if (is_puncid(tk, P_PAREN_L))
     {
         Type *t, *temp_tail;
+        bool is_vargs = false;
         t = malloc_type(TT_FUNCTION);
-        t->args = make_parameter_type_list();
+        t->args = make_parameter_type_list(&is_vargs);
         
         temp_tail = ret_type_tail(node->type);
         if (temp_tail == NULL) node->type = t;
@@ -461,14 +459,21 @@ make_direct_declarator(Node *node)
     }
     else if (is_puncid(tk, P_SQR_BRCK_L))
     {
-        Type *t;
+        Type *t, *temp_tail;
         t = make_direct_decl_array();
+
+        temp_tail = ret_type_tail(node->type);
+        if (temp_tail == NULL) node->type = t;
+        else if (temp_tail->tt == TT_FUNCTION) temp_tail->ret = t;
+        else if (temp_tail->tt == TT_POINTER)  temp_tail->ptr = t;
+        else if (temp_tail->tt == TT_ARRAY)    temp_tail->base = t;
+
         free_token(&tk);
         tk = next();
         if (is_puncid(tk, P_SQR_BRCK_R))
         {
             free_token(&tk);
-            return t;
+            return;
         }
         else
         {
@@ -526,6 +531,7 @@ make_direct_decl_array()
         if (is_puncid(tk, P_MULT))
         {
             free_token(&tk);
+            t->is_varg = true;
             return t;
         }
         else
@@ -549,24 +555,84 @@ make_type_qual_list(bool *is_const, bool *is_volatile)
     return true;
 }
 
-static Node *
-make_assignment_exp()
+static List *
+make_parameter_type_list(bool *is_vargs)
 {
+    List *list;
+    Token *tk, *tk2;
+
+    list = make_parameter_list();
+    
+    tk = next();
+    if (is_puncid(tk, P_COMMA))
+    {
+        tk2 = next();
+        if (is_puncid(tk2, P_TLEAD))
+        {
+            free_token(&tk);
+            free_token(&tk2);
+            *is_vargs = true;
+        }
+        else
+        {
+            pushback(tk2);
+            pushback(tk);
+        }
+    }
+    else
+    {
+        pushback(tk);
+    }
+    return list;
 }
 
 static List *
-make_parameter_type_list()
-{
-}
-
-static Node *
 make_parameter_list()
 {
+    Token *tk;
+    List *list;
+    Node *node;
+
+    list = make_list();
+    
+    tk = next();
+    if (is_puncid(tk, P_PAREN_R))
+    {
+        pushback(tk);
+        return list;
+    }
+    else
+    {
+        pushback(tk);
+    }
+    for (;;)
+    {
+        node = make_parameter_decl();
+        if (node == NULL) break;
+        add_list(list, node);
+        tk = next();
+        if (is_puncid(tk, P_COMMA))
+        {
+            free_token(&tk);
+        }
+        else
+        {
+            pushback(tk);
+            break;
+        }
+    }
+
+    return list;
 }
 
 static Node *
 make_parameter_decl()
 {
+    Node *node;
+    node = malloc_node(AST_VAR_DECL);
+    make_decl_spec(node);
+    make_declarator(node);
+    return node;
 }
 
 static Type *
@@ -596,6 +662,57 @@ ret_type_tail(Type *t)
         }
     }
     return temp_tail;
+}
+
+static Node *
+make_primary_exp()
+{
+    Token *tk;
+    Node *node;
+    tk = next();
+    if (tk->kind == TK_IDENT)
+    {
+        free_token(&tk);
+        node = malloc_node(AST_IDENT);
+    }
+    else if (tk->kind == TK_CONSTANT)
+    {
+        free_token(&tk);
+        node = malloc_node(AST_CONSTANT);
+    }
+    else if (tk->kind == TK_STRING)
+    {
+        free_token(&tk);
+        node = malloc_node(AST_STRING);
+    }
+    else if (is_puncid(tk, P_PAREN_L))
+    {
+        free_token(&tk);
+        Node *ret = make_exp();
+        tk = next();
+        if (is_puncid(tk, P_PAREN_R))
+        {
+            free_token(&tk);
+            return ret;
+        }
+    }
+    else
+    {
+        // error
+    }
+    return NULL;
+}
+
+static Node *
+make_assignment_exp()
+{
+    return NULL;
+}
+
+static Node *
+make_exp()
+{
+    return NULL;
 }
 
 static Node *
@@ -644,6 +761,7 @@ malloc_type(enum TypeType tt)
     case TT_FUNCTION:
         t->ret = NULL;
         t->args = NULL;
+        t->is_vargs = false;
         t->is_inline = false;
         break;
     }
@@ -679,6 +797,7 @@ copy_type(const Type *t)
     case TT_FUNCTION:
         newt->ret = t->ret;
         newt->args = t->args;
+        newt->is_vargs = t->is_vargs;
         newt->is_inline = t->is_inline;
         break;
     case TT_POINTER:
