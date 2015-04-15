@@ -949,11 +949,130 @@ is_keyword(const Token *tk, const char *p)
 }
 
 #ifdef TEST_LL_PARSER
+#define ARRAY_LEN(x) (sizeof((x))/sizeof(char))
+static void output_init(FILE *f);
+static void output_end(FILE *f);
+static void output_node(FILE *f, const Node *node, const char *parent);
+static void output_type(FILE *f, const Type *type, const char *parent, const char *edge);
+
+static void
+output_init(FILE *f) { fprintf(f, "digraph {\n"); }
+static void
+output_end(FILE *f) { fprintf(f, "}\n"); }
+
+static void
+output_node(FILE *f, const Node *node, const char *parent)
+{
+    switch (node->kind)
+    {
+    case AST_VAR_DECL:
+    case AST_FUNC_DEF:
+        {
+            char *p = NULL, *t = NULL, str[256];
+            snprintf(str, ARRAY_LEN(str), "node_%s", node->name->str);
+            if (node->sc == SC_NONE) p = "NONE";
+            else if (node->sc == SC_TYPEDEF) p = "TYPEDEF";
+            else if (node->sc == SC_EXTERN) p = "EXTERN";
+            else if (node->sc == SC_STATIC) p = "STATIC";
+            if (node->kind == AST_VAR_DECL) t = "VARDECL";
+            else if (node->kind == AST_FUNC_DEF) t = "FUNCDEF";
+            fprintf(f, "%s [shape=box, label=\"%s\\nname=%s\\nsc=%s\"];\n",
+                    str, t, node->name->str, p);
+            if (parent != NULL) fprintf(f, "%s -> %s\n", parent, str);
+            output_type(f, node->type, str, "Type");
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void
+output_type(FILE *f, const Type *type, const char *parent, const char *edge)
+{
+    static unsigned int type_count = 0;
+    char p[256];
+    if (type == NULL) return;
+
+    snprintf(p, ARRAY_LEN(p), "type_%d", type_count++);
+    switch (type->tt)
+    {
+    case TT_BASIC:
+        {
+            fprintf(f, "%s [shape=box, label=\"%s,%d,%d\\nconst=%d\\nvolatile=%d\\nsigned=%d\"];\n",
+                    p, "BASIC", type->size, type->align,
+                    type->is_const, type->is_volatile, type->is_signed);
+        }
+        break;
+    case TT_STRUCT_UNION:
+        {
+            fprintf(f, "%s [shape=box, label=\"%s,%d,%d\\nconst=%d\\nvolatile=%d\\n\"];\n",
+                    p, type->is_struct ? "STRUCT" : "UNION", type->size, type->align,
+                    type->is_const, type->is_volatile);
+        }
+        break;
+    case TT_POINTER:
+        {
+            fprintf(f, "%s [shape=box, label=\"%s,%d,%d\\nconst=%d\\nvolatile=%d\\n\"];\n",
+                    p, "POINTER", type->size, type->align,
+                    type->is_const, type->is_volatile);
+            output_type(f, type->ptr, p, "ptr");
+        }
+        break;
+    case TT_ARRAY:
+        {
+            fprintf(f, "%s [shape=box, label=\"%s,%d,%d\\nconst=%d\\nvolatile=%d\\nstatic=%d\\nvarg=%d\\n\"];\n",
+                    p, "ARRAY", type->size, type->align,
+                    type->is_const, type->is_volatile, type->is_static, type->is_varg);
+            output_type(f, type->base, p, "base");
+        }
+        break;
+    case TT_FUNCTION:
+        {
+            iter_list iter;
+            fprintf(f, "%s [shape=box, label=\"%s,%d,%d\\nconst=%d\\nvolatile=%d\\nvargs=%d\\ninline=%d\"];\n",
+                    p, "FUNCTION", type->size, type->align,
+                    type->is_const, type->is_volatile, type->is_vargs, type->is_inline);
+            output_type(f, type->ret, p, "ret");
+            if (type->args == NULL) break;
+            for (init_iter_list(type->args, &iter);
+                 hasnext_iter_list(&iter);
+                 next_iter_list(&iter))
+            {
+                output_node(f, ((Node*)value_iter_list(&iter)), p);
+            }
+        }
+        break;
+    }
+    fprintf(f, "%s -> %s [label=\"%s\"];\n", parent, p, edge);
+}
+
 int
 main(int argc, char *argv[])
 {
+    List *list;
+    FILE *file;
+    char output[256];
+    iter_list iter;
+
     init_parser(argv[1]);
-    parse_top();
+    list = parse_top();
+
+    snprintf(output, sizeof(output)/sizeof(char), "%s.dot", argv[1]);
+    file = fopen(output, "w");
+    {
+        output_init(file);
+
+        for (init_iter_list(list, &iter);
+                hasnext_iter_list(&iter);
+                next_iter_list(&iter))
+        {
+            output_node(file, (Node*)value_iter_list(&iter), NULL);
+        }
+
+    } output_end(file);
+
+    fclose(file);
     return EXIT_SUCCESS;
 }
 #endif

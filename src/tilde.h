@@ -140,7 +140,7 @@ typedef struct Type
         struct /* function */
         {
             struct Type *ret;
-            List *args; // List<Type*>
+            List *args; // List<Node*>
             bool is_vargs;
             bool is_inline;
         };
