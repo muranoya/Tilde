@@ -187,21 +187,17 @@ typedef struct Node
     Type *type;
     union
     {
-        struct // var-decl
+        struct // var-decl or function definition
         {
-            String *var_name;
+            String *name;
+            struct Node *init_or_body;
             enum StorageClass sc;
-        };
-        struct // function definition
-        {
-            String *func_name;
-            struct Node *func_body;
         };
         struct // if statement
         {
             struct Node *if_exp;
-            struct Node *true_stat;
-            struct Node *false_stat;
+            struct Node *true_stmt;
+            struct Node *false_stmt;
         };
         struct // for statement
         {

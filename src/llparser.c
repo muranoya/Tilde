@@ -21,7 +21,9 @@ Type    *ptr_t = &(Type){.size = 8, .align = 8, .is_const = false, .is_volatile 
 static List *stack; // List<Token*>
 
 /* prototypes */
-static Node *make_extdecl();
+// declaration
+static void make_extdecl(List *list);
+static Node *make_initializer();
 static void make_decl_spec(Node *node);
 static bool make_storage_class_spec(Node *node);
 static Type *make_type_spec();
@@ -37,10 +39,15 @@ static List *make_parameter_list();
 static Node *make_parameter_decl();
 static Type *ret_type_tail(Type *t);
 
+// expression
 static Node *make_primary_exp();
 static Node *make_assignment_exp();
 static Node *make_exp();
 
+// statement
+static Node *make_compound_stmt();
+
+// util
 static Node *malloc_node(enum AST ast);
 static Type *malloc_type(enum TypeType tt);
 static Type *copy_type(const Type *t);
@@ -67,15 +74,15 @@ parse_top()
     list = make_list();
     for (;;)
     {
-        node = make_extdecl();
-        add_list(list, node);
+        make_extdecl(list);
         tk = next();
         if (tk->kind == TK_ENDFILE) return list;
     }
 }
 
-static Node *
-make_extdecl()
+/* List<Node*> */
+static void
+make_extdecl(List *list)
 {
     Node *node;
     Token *tk;
@@ -90,24 +97,79 @@ make_extdecl()
     {
         // function definition
         free_token(&tk);
+        node->kind = AST_FUNC_DEF;
+        node->init_or_body = make_compound_stmt();
+        tk = next();
+        if (is_puncid(tk, P_CRL_BRCK_R))
+        {
+            free_token(&tk);
+        }
+        else
+        {
+            // error
+        }
+        add_list(list, node);
+        return;
     }
     else
     {
         pushback(tk);
     }
+    
+    for (;;)
+    {
+        tk = next();
+        if (is_puncid(tk, P_ASGN))
+        {
+            free_token(&tk);
+            node->init_or_body = make_initializer();
+        }
+        else
+        {
+            pushback(tk);
+        }
+        
+        tk = next();
+        if (is_puncid(tk, P_COMMA))
+        {
+            Node *next_node;
+            next_node = malloc_node(AST_VAR_DECL);
+            next_node->sc = node->sc;
+            next_node->type = ret_type_tail(node->type);
+            make_declarator(next_node);
+            add_list(list, node);
+            node = next_node;
+            free_token(&tk);
+        }
+        else if (is_puncid(tk, P_SCOLON))
+        {
+            free_token(&tk);
+            add_list(list, node);
+            return;
+        }
+        else
+        {
+            // error
+        }
+    }
+}
+
+static Node *
+make_initializer()
+{
+    Token *tk;
 
     tk = next();
-    if (is_puncid(tk, P_SCOLON))
+    if (is_puncid(tk, P_CRL_BRCK_L))
     {
         free_token(&tk);
-        return;
+        // TODO
     }
     else
     {
-        // error
+        pushback(tk);
+        return make_assignment_exp();
     }
-
-    return node;
 }
 
 static void
@@ -280,11 +342,11 @@ make_type_spec()
     }
     else if (strcmp("union", p) == 0)
     {
-        Type *struct_type;
+        Type *union_type;
         free_token(&tk);
-        struct_type = malloc_type(TT_STRUCT_UNION);
-        struct_type->is_struct = false;
-        return NULL;
+        union_type = malloc_type(TT_STRUCT_UNION);
+        union_type->is_struct = false;
+        return union_type;
     }
     else if (strcmp("enum", p) == 0)
     {
@@ -440,7 +502,7 @@ make_direct_declarator(Node *node)
     tk = next();
     if (tk->kind == TK_IDENT)
     {
-        node->var_name = new_string(tk->str);
+        node->name = new_string(tk->str);
         free_token(&tk);
     }
     else if (is_puncid(tk, P_PAREN_L))
@@ -704,6 +766,10 @@ ret_type_tail(Type *t)
             if (temp_tail->base == NULL) break;
             temp_tail = temp_tail->base;
         }
+        else
+        {
+            return t;
+        }
     }
     return temp_tail;
 }
@@ -760,6 +826,12 @@ make_exp()
 }
 
 static Node *
+make_compound_stmt()
+{
+    return NULL;
+}
+
+static Node *
 malloc_node(enum AST ast)
 {
     Node *node;
@@ -769,12 +841,14 @@ malloc_node(enum AST ast)
     switch (ast)
     {
     case AST_VAR_DECL:
-        node->var_name = NULL;
+        node->name = NULL;
+        node->init_or_body = NULL;
         node->sc = SC_NONE;
         break;
     case AST_FUNC_DEF:
-        node->func_name = NULL;
-        node->func_body = NULL;
+        node->name = NULL;
+        node->init_or_body = NULL;
+        node->sc = SC_NONE;
         break;
     }
     return node;
