@@ -952,7 +952,7 @@ is_keyword(const Token *tk, const char *p)
 #define ARRAY_LEN(x) (sizeof((x))/sizeof(char))
 static void output_init(FILE *f);
 static void output_end(FILE *f);
-static void output_node(FILE *f, const Node *node, const char *parent);
+static void output_node(FILE *f, const Node *node, const char *parent, const char *edge);
 static void output_type(FILE *f, const Type *type, const char *parent, const char *edge);
 
 static void
@@ -961,7 +961,7 @@ static void
 output_end(FILE *f) { fprintf(f, "}\n"); }
 
 static void
-output_node(FILE *f, const Node *node, const char *parent)
+output_node(FILE *f, const Node *node, const char *parent, const char *edge)
 {
     switch (node->kind)
     {
@@ -978,7 +978,15 @@ output_node(FILE *f, const Node *node, const char *parent)
             else if (node->kind == AST_FUNC_DEF) t = "FUNCDEF";
             fprintf(f, "%s [shape=box, label=\"%s\\nname=%s\\nsc=%s\"];\n",
                     str, t, node->name->str, p);
-            if (parent != NULL) fprintf(f, "%s -> %s\n", parent, str);
+            if (parent != NULL)
+            {
+                fprintf(f, "%s -> %s", parent, str);
+                if (edge != NULL)
+                {
+                    fprintf(f, " [label=\"%s\"];", edge);
+                }
+                fprintf(f, "\n");
+            }
             output_type(f, node->type, str, "Type");
         }
         break;
@@ -1039,7 +1047,7 @@ output_type(FILE *f, const Type *type, const char *parent, const char *edge)
                  hasnext_iter_list(&iter);
                  next_iter_list(&iter))
             {
-                output_node(f, ((Node*)value_iter_list(&iter)), p);
+                output_node(f, ((Node*)value_iter_list(&iter)), p, "args");
             }
         }
         break;
@@ -1067,7 +1075,7 @@ main(int argc, char *argv[])
                 hasnext_iter_list(&iter);
                 next_iter_list(&iter))
         {
-            output_node(file, (Node*)value_iter_list(&iter), NULL);
+            output_node(file, (Node*)value_iter_list(&iter), NULL, NULL);
         }
 
     } output_end(file);
