@@ -147,7 +147,7 @@ typedef struct Type
         struct /* array */
         {
             bool is_static; /* only function args */
-            bool is_varg;   /* variable length array */
+            bool is_varray;   /* variable length array */
             struct Node *asn_exp;
             struct Type *base;
         };
@@ -165,12 +165,24 @@ enum AST
     AST_CONSTANT,
     AST_STRING,
 
+    // top-level
     AST_VAR_DECL,
     AST_FUNC_DEF,
+    // statement
+    AST_LABEL,
+    AST_CASE,
+    AST_DEFAULT,
+    AST_COMP_STMT,
+    AST_EXP_STMT,
     AST_IF,
-    AST_FOR,
+    AST_SWITCH,
     AST_WHILE,
     AST_DO,
+    AST_FOR,
+    AST_GOTO,
+    AST_CONTINUE,
+    AST_BREAK,
+    AST_RETURN,
 };
 
 enum StorageClass
@@ -193,18 +205,38 @@ typedef struct Node
             struct Node *init_or_body;
             enum StorageClass sc;
         };
+        struct // label
+        {
+            String *label;
+            struct Node *label_stmt;
+        };
+        struct // case
+        {
+            struct Node *case_exp;
+            struct Node *case_stmt;
+        };
+        struct // default
+        {
+            struct Node *default_stmt;
+        };
+        struct // compound statement
+        {
+            List *stmts; // List<Node*>
+        };
+        struct // expression statement
+        {
+            struct Node *exp_stmt;
+        };
         struct // if statement
         {
             struct Node *if_exp;
             struct Node *true_stmt;
             struct Node *false_stmt;
         };
-        struct // for statement
+        struct // switch statement
         {
-            struct Node *for_init_exp;
-            struct Node *for_cond_exp;
-            struct Node *for_step_exp;
-            struct Node *for_body;
+            struct Node *switch_cond;
+            struct Node *switch_stmt;
         };
         struct // while statement
         {
@@ -215,6 +247,21 @@ typedef struct Node
         {
             struct Node *do_cond;
             struct Node *do_body;
+        };
+        struct // for statement
+        {
+            struct Node *for_init_exp;
+            struct Node *for_cond_exp;
+            struct Node *for_step_exp;
+            struct Node *for_body;
+        };
+        struct // goto statement
+        {
+            String *goto_label;
+        };
+        struct // return statement
+        {
+            struct Node *return_exp;
         };
     };
 } Node;

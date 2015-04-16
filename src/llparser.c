@@ -43,9 +43,15 @@ static Type *ret_type_tail(Type *t);
 static Node *make_primary_exp();
 static Node *make_assignment_exp();
 static Node *make_exp();
+static Node *make_const_exp();
 
 // statement
-static Node *make_compound_stmt();
+static Node *make_statement(bool in_switch);
+static Node *make_labeled_stmt(bool in_switch);
+static Node *make_compound_stmt(bool in_switch);
+static Node *make_select_stmt(bool in_switch);
+static Node *make_iteration_stmt(bool in_switch);
+static Node *make_jump_stmt(bool in_switch);
 
 // util
 static Node *malloc_node(enum AST ast);
@@ -98,7 +104,7 @@ make_extdecl(List *list)
         // function definition
         free_token(&tk);
         node->kind = AST_FUNC_DEF;
-        node->init_or_body = make_compound_stmt();
+        node->init_or_body = make_compound_stmt(false);
         tk = next();
         if (is_puncid(tk, P_CRL_BRCK_R))
         {
@@ -637,7 +643,7 @@ make_direct_decl_array()
         if (is_puncid(tk, P_MULT))
         {
             free_token(&tk);
-            t->is_varg = true;
+            t->is_varray = true;
             return t;
         }
         else
@@ -826,8 +832,447 @@ make_exp()
 }
 
 static Node *
-make_compound_stmt()
+make_const_exp()
 {
+    return NULL;
+}
+
+static Node *
+make_statement(bool in_switch)
+{
+    Node *node;
+
+    node = make_labeled_stmt(in_switch);
+    if (node != NULL) return node;
+
+    node = make_compound_stmt(in_switch);
+    if (node != NULL) return node;
+    
+    node = make_select_stmt(in_switch);
+    if (node != NULL) return node;
+
+    node = make_iteration_stmt(in_switch);
+    if (node != NULL) return node;
+
+    node = make_jump_stmt(in_switch);
+    if (node != NULL) return node;
+
+    // expression statement
+    node = malloc_node(AST_EXP_STMT);
+    node->exp_stmt = make_exp();
+    return node;
+}
+
+static Node *
+make_labeled_stmt(bool in_switch)
+{
+    Token *tk;
+    Node *node = NULL;
+
+    tk = next();
+    if (in_switch)
+    {
+        // "case" and "default" are
+        // appeared in only switch-statement
+        if (is_keyword(tk, "case"))
+        {
+            free_token(&tk);
+            node = malloc_node(AST_CASE);
+            node->case_exp = make_const_exp();
+
+            tk = next();
+            if (is_puncid(tk, P_COLON))
+            {
+                free_token(&tk);
+                node->case_stmt = make_statement(true);
+                return node;
+            }
+            else
+            {
+                pushback(tk);
+                // error
+            }
+        }
+        else if (is_keyword(tk, "default"))
+        {
+            free_token(&tk);
+            node = malloc_node(AST_DEFAULT);
+
+            tk = next();
+            if (is_puncid(tk, P_COLON))
+            {
+                free_token(&tk);
+                node->default_stmt = make_statement(true);
+                return node;
+            }
+            else
+            {
+                pushback(tk);
+                // error
+            }
+        }
+    }
+    if (tk->kind == TK_IDENT)
+    {
+        Token *tk2 = next();
+        if (is_puncid(tk2, P_COLON))
+        {
+            node = malloc_node(AST_LABEL);
+            node->label = new_string(tk->str);
+            node->label_stmt = make_statement(in_switch);
+            free_token(&tk);
+            free_token(&tk2);
+            return node;
+        }
+        else
+        {
+            pushback(tk);
+            pushback(tk2);
+        }
+    }
+    else
+    {
+        pushback(tk);
+    }
+    return NULL;
+}
+
+static Node *
+make_compound_stmt(bool in_switch)
+{
+    Token *tk;
+
+    tk = next();
+    if (is_puncid(tk, P_CRL_BRCK_L))
+    {
+        Node *node = NULL;
+        List *list = make_list();
+        node = malloc_node(AST_COMP_STMT);
+        node->stmts = list;
+
+        free_token(&tk);
+        for (;;)
+        {
+            tk = next();
+            if (is_puncid(tk, P_CRL_BRCK_R))
+            {
+                free_token(&tk);
+                return node;
+            }
+            else
+            {
+                pushback(tk);
+            }
+            // TODO
+        }
+    }
+    return NULL;
+}
+
+static Node *
+make_select_stmt(bool in_switch)
+{
+    Token *tk;
+    Node *node = NULL;
+
+    tk = next();
+    if (is_keyword(tk, "if"))
+    {
+        free_token(&tk);
+
+        tk = next();
+        if (is_puncid(tk, P_PAREN_L))
+        {
+            free_token(&tk);
+            node = malloc_node(AST_IF);
+            node->if_exp = make_exp();
+
+            tk = next();
+            if (is_puncid(tk, P_PAREN_R))
+            {
+                free_token(&tk);
+            }
+            else
+            {
+                pushback(tk);
+                // error
+            }
+
+            node->true_stmt = make_statement(in_switch);
+
+            tk = next();
+            if (is_keyword(tk, "else"))
+            {
+                free_token(&tk);
+                node->false_stmt = make_statement(in_switch);
+            }
+            else
+            {
+                pushback(tk);
+            }
+            return node;
+        }
+        else
+        {
+            pushback(tk);
+            // error
+        }
+    }
+    else if (is_keyword(tk, "switch"))
+    {
+        free_token(&tk);
+        node = malloc_node(AST_SWITCH);
+
+        tk = next();
+        if (is_puncid(tk, P_PAREN_L))
+        {
+            free_token(&tk);
+            node->switch_cond = make_exp();
+
+            tk = next();
+            if (is_puncid(tk, P_PAREN_R))
+            {
+                free_token(&tk);
+                node->switch_stmt = make_statement(true);
+                return node;
+            }
+            else
+            {
+                pushback(tk);
+                // error
+            }
+        }
+        else
+        {
+            pushback(tk);
+            // error
+        }
+    }
+    else
+    {
+        pushback(tk);
+    }
+    return NULL;
+}
+
+static Node *
+make_iteration_stmt(bool in_switch)
+{
+    Token *tk;
+    Node *node;
+
+    tk = next();
+    if (is_keyword(tk, "while"))
+    {
+        free_token(&tk);
+        node = malloc_node(AST_WHILE);
+
+        tk = next();
+        if (is_puncid(tk, P_PAREN_L))
+        {
+            free_token(&tk);
+            node->while_cond = make_exp();
+
+            tk = next();
+            if (is_puncid(tk, P_PAREN_R))
+            {
+                free_token(&tk);
+                node->while_body = make_statement(in_switch);
+                return node;
+            }
+            else
+            {
+                pushback(tk);
+                // error
+            }
+        }
+        else
+        {
+            pushback(tk);
+            // error
+        }
+    }
+    else if (is_keyword(tk, "do"))
+    {
+        free_token(&tk);
+        node = malloc_node(AST_DO);
+        node->do_body = make_statement(in_switch);
+
+        tk = next();
+        if (is_keyword(tk, "while"))
+        {
+            free_token(&tk);
+            tk = next();
+            if (is_puncid(tk, P_PAREN_L))
+            {
+                free_token(&tk);
+                node->do_body = make_exp();
+                tk = next();
+                if (is_puncid(tk, P_PAREN_R))
+                {
+                    free_token(&tk);
+                    tk = next();
+                    if (is_puncid(tk, P_SCOLON))
+                    {
+                        free_token(&tk);
+                        return node;
+                    }
+                    else
+                    {
+                        pushback(tk);
+                        // error
+                    }
+                }
+                else
+                {
+                    pushback(tk);
+                    // error
+                }
+            }
+            else
+            {
+                pushback(tk);
+                // error
+            }
+        }
+        else
+        {
+            pushback(tk);
+            // error
+        }
+    }
+    else if (is_keyword(tk, "for"))
+    {
+        free_token(&tk);
+        node = malloc_node(AST_FOR);
+        tk = next();
+        if (is_puncid(tk, P_PAREN_L))
+        {
+            free_token(&tk);
+            tk = next();
+            if (is_puncid(tk, P_SCOLON))
+            {
+                free_token(&tk);
+            }
+            else
+            {
+                pushback(tk);
+                node->for_init_exp = make_exp();
+                tk = next();
+                if (is_puncid(tk, P_SCOLON))
+                {
+                    free_token(&tk);
+                }
+                else
+                {
+                    pushback(tk);
+                    // error
+                }
+            }
+            tk = next();
+            if (is_puncid(tk, P_SCOLON))
+            {
+                free_token(&tk);
+            }
+            else
+            {
+                pushback(tk);
+                node->for_cond_exp = make_exp();
+                tk = next();
+                if (is_puncid(tk, P_SCOLON))
+                {
+                    free_token(&tk);
+                }
+                else
+                {
+                    pushback(tk);
+                    // error
+                }
+            }
+            node->for_step_exp = make_exp();
+            tk = next();
+            if (is_puncid(tk, P_PAREN_R))
+            {
+                free_token(&tk);
+                node->for_body = make_statement(in_switch);
+                return node;
+            }
+            else
+            {
+                pushback(tk);
+                // error
+            }
+        }
+        else
+        {
+            pushback(tk);
+            // error
+        }
+    }
+    else
+    {
+        pushback(tk);
+    }
+    return NULL;
+}
+
+static Node *
+make_jump_stmt(bool in_switch)
+{
+    Token *tk;
+    Node *node;
+    
+    tk = next();
+    if (is_keyword(tk, "goto"))
+    {
+        free_token(&tk);
+        node = malloc_node(AST_GOTO);
+        tk = next();
+        if (tk->kind == TK_IDENT)
+        {
+            node->goto_label = new_string(tk->str);
+            free_token(&tk);
+            return node;
+        }
+        else
+        {
+            pushback(tk);
+            // error
+        }
+    }
+    else if (is_keyword(tk, "continue"))
+    {
+        free_token(&tk);
+        node = malloc_node(AST_CONTINUE);
+        return node;
+    }
+    else if (is_keyword(tk, "break"))
+    {
+        free_token(&tk);
+        node = malloc_node(AST_BREAK);
+        return node;
+    }
+    else if (is_keyword(tk, "return"))
+    {
+        free_token(&tk);
+        node = malloc_node(AST_RETURN);
+        tk = next();
+        if (is_puncid(tk, P_SCOLON))
+        {
+            free_token(&tk);
+        }
+        else
+        {
+            pushback(tk);
+            node->return_exp = make_expression();
+        }
+        return node;
+    }
+    else
+    {
+        pushback(tk);
+    }
+
     return NULL;
 }
 
@@ -849,6 +1294,52 @@ malloc_node(enum AST ast)
         node->name = NULL;
         node->init_or_body = NULL;
         node->sc = SC_NONE;
+        break;
+    case AST_LABEL:
+        node->label = NULL;
+        node->label_stmt = NULL;
+        break;
+    case AST_CASE:
+        node->case_exp = NULL;
+        node->case_stmt = NULL;
+        break;
+    case AST_DEFAULT:
+        node->default_stmt = NULL;
+        break;
+    case AST_COMP_STMT:
+        node->stmts = NULL;
+        break;
+    case AST_EXP_STMT:
+        node->exp_stmt = NULL;
+        break;
+    case AST_IF:
+        node->if_exp = NULL;
+        node->true_stmt = NULL;
+        node->false_stmt = NULL;
+        break;
+    case AST_SWITCH:
+        node->switch_cond = NULL;
+        node->switch_stmt = NULL;
+        break;
+    case AST_WHILE:
+        node->while_cond = NULL;
+        node->while_body = NULL;
+        break;
+    case AST_DO:
+        node->do_cond = NULL;
+        node->do_body = NULL;
+        break;
+    case AST_FOR:
+        node->for_init_exp = NULL;
+        node->for_cond_exp = NULL;
+        node->for_step_exp = NULL;
+        node->for_body = NULL;
+        break;
+    case AST_GOTO:
+        node->goto_label = NULL;
+        break;
+    case AST_RETURN:
+        node->return_exp = NULL;
         break;
     }
     return node;
@@ -872,15 +1363,15 @@ malloc_type(enum TypeType tt)
         t->is_struct = true;
         t->contents = NULL;
         break;
-    case TT_ARRAY:
-        t->is_static = false;
-        t->asn_exp = false;
-        break;
     case TT_FUNCTION:
         t->ret = NULL;
         t->args = NULL;
         t->is_vargs = false;
         t->is_inline = false;
+        break;
+    case TT_ARRAY:
+        t->is_static = false;
+        t->asn_exp = false;
         break;
     }
     return t;
@@ -907,16 +1398,17 @@ copy_type(const Type *t)
         newt->is_struct = t->is_struct;
         newt->contents = t->contents;
         break;
-    case TT_ARRAY:
-        newt->is_static = t->is_static;
-        newt->asn_exp = t->asn_exp;
-        newt->base = t->base;
-        break;
     case TT_FUNCTION:
         newt->ret = t->ret;
         newt->args = t->args;
         newt->is_vargs = t->is_vargs;
         newt->is_inline = t->is_inline;
+        break;
+    case TT_ARRAY:
+        newt->is_static = t->is_static;
+        newt->is_varray = t->is_varray;
+        newt->asn_exp = t->asn_exp;
+        newt->base = t->base;
         break;
     case TT_POINTER:
         newt->ptr = NULL;
@@ -1031,7 +1523,7 @@ output_type(FILE *f, const Type *type, const char *parent, const char *edge)
         {
             fprintf(f, "%s [shape=box, label=\"%s,%d,%d\\nconst=%d\\nvolatile=%d\\nstatic=%d\\nvarg=%d\\n\"];\n",
                     p, "ARRAY", type->size, type->align,
-                    type->is_const, type->is_volatile, type->is_static, type->is_varg);
+                    type->is_const, type->is_volatile, type->is_static, type->is_varray);
             output_type(f, type->base, p, "base");
         }
         break;
