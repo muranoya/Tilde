@@ -232,7 +232,6 @@ static bool
 make_storage_class_spec(Node *node)
 {
     Token *tk;
-    char *p;
     bool ret;
 
     tk = next();
@@ -242,19 +241,18 @@ make_storage_class_spec(Node *node)
         return false;
     }
 
-    p = tk->str->str;
     ret = false;
-    if (strcmp("typedef", p) == 0)
+    if (cmp2_string(tk->str, "typedef") == 0)
     {
         node->sc = SC_TYPEDEF;
         ret = true;
     }
-    else if (strcmp("extern", p) == 0)
+    else if (cmp2_string(tk->str, "extern") == 0)
     {
         node->sc = SC_EXTERN;
         ret = true;
     }
-    else if (strcmp("static", p) == 0)
+    else if (cmp2_string(tk->str, "static") == 0)
     {
         node->sc = SC_STATIC;
         ret = true;
@@ -268,7 +266,6 @@ static Type *
 make_type_spec()
 {
     Token *tk;
-    char *p;
 
     tk = next();
     if (tk->kind != TK_KEYWORD)
@@ -277,68 +274,68 @@ make_type_spec()
         return false;
     }
 
-    p = tk->str->str;
-    if (strcmp("void", p) == 0)
+
+    if (cmp2_string(tk->str, "void") == 0)
     {
         free_token(&tk);
         return copy_type(void_t);
     }
-    else if (strcmp("char", p) == 0)
+    else if (cmp2_string(tk->str, "char") == 0)
     {
         free_token(&tk);
         return copy_type(char_t);
     }
-    else if (strcmp("uchar", p) == 0)
+    else if (cmp2_string(tk->str, "uchar") == 0)
     {
         free_token(&tk);
         return copy_type(uchar_t);
     }
-    else if (strcmp("short", p) == 0)
+    else if (cmp2_string(tk->str, "short") == 0)
     {
         free_token(&tk);
         return copy_type(short_t);
     }
-    else if (strcmp("ushort", p) == 0)
+    else if (cmp2_string(tk->str, "ushort") == 0)
     {
         free_token(&tk);
         return copy_type(ushort_t);
     }
-    else if (strcmp("int", p) == 0)
+    else if (cmp2_string(tk->str, "int") == 0)
     {
         free_token(&tk);
         return copy_type(int_t);
     }
-    else if (strcmp("uint", p) == 0)
+    else if (cmp2_string(tk->str, "uint") == 0)
     {
         free_token(&tk);
         return copy_type(uint_t);
     }
-    else if (strcmp("long", p) == 0)
+    else if (cmp2_string(tk->str, "long") == 0)
     {
         free_token(&tk);
         return copy_type(long_t);
     }
-    else if (strcmp("ulong", p) == 0)
+    else if (cmp2_string(tk->str, "ulong") == 0)
     {
         free_token(&tk);
         return copy_type(ulong_t);
     }
-    else if (strcmp("float", p) == 0)
+    else if (cmp2_string(tk->str, "float") == 0)
     {
         free_token(&tk);
         return copy_type(float_t);
     }
-    else if (strcmp("double", p) == 0)
+    else if (cmp2_string(tk->str, "double") == 0)
     {
         free_token(&tk);
         return copy_type(double_t);
     }
-    else if (strcmp("bool", p) == 0)
+    else if (cmp2_string(tk->str, "bool") == 0)
     {
         free_token(&tk);
         return copy_type(bool_t);
     }
-    else if (strcmp("struct", p) == 0)
+    else if (cmp2_string(tk->str, "struct") == 0)
     {
         Type *struct_type;
         free_token(&tk);
@@ -346,7 +343,7 @@ make_type_spec()
         struct_type->is_struct = true;
         return struct_type;
     }
-    else if (strcmp("union", p) == 0)
+    else if (cmp2_string(tk->str, "union") == 0)
     {
         Type *union_type;
         free_token(&tk);
@@ -354,12 +351,12 @@ make_type_spec()
         union_type->is_struct = false;
         return union_type;
     }
-    else if (strcmp("enum", p) == 0)
+    else if (cmp2_string(tk->str, "enum") == 0)
     {
         free_token(&tk);
         return NULL;
     }
-    else if (strcmp("typedef", p) == 0)
+    else if (cmp2_string(tk->str, "typedef") == 0)
     {
         free_token(&tk);
         return NULL;
@@ -381,13 +378,13 @@ make_type_qual(bool *isconst, bool *isvolatile)
         return false;
     }
 
-    if (strcmp("const", tk->str->str) == 0)
+    if (cmp2_string(tk->str, "const") == 0)
     {
         *isconst = true;
         free_token(&tk);
         return true;
     }
-    else if (strcmp("volatile", tk->str->str) == 0)
+    else if (cmp2_string(tk->str, "volatile") == 0)
     {
         *isvolatile = true;
         free_token(&tk);
@@ -409,7 +406,7 @@ make_func_spec()
         return false;
     }
 
-    if (strcmp("inline", tk->str->str) == 0)
+    if (cmp2_string(tk->str, "inline") == 0)
     {
         free_token(&tk);
         return true;
@@ -837,6 +834,7 @@ make_const_exp()
     return NULL;
 }
 
+/* statement */
 static Node *
 make_statement(bool in_switch)
 {
@@ -1424,7 +1422,7 @@ pushback(Token *tk) { add_list(stack, tk); }
 static Token *
 next()
 {
-    if (count_list(stack) != 0) return (Token*)pop_list(stack);
+    if (stack->len != 0) return (Token*)pop_list(stack);
     return next_token();
 }
 
@@ -1437,7 +1435,7 @@ is_puncid(const Token *tk, enum PnctID id)
 static bool
 is_keyword(const Token *tk, const char *p)
 {
-    return tk->kind == TK_KEYWORD && strcmp(tk->str->str, p) == 0;
+    return tk->kind == TK_KEYWORD && cmp2_string(tk->str, p) == 0;
 }
 
 #ifdef TEST_LL_PARSER

@@ -86,7 +86,7 @@ remove_hashmap(Hashmap *hmap, const String *key, void (*liberator)(void*))
     {
         hash = calc_hash(hmap->size, i, key);
         if (*(hmap->keys+hash) == NULL) return false;
-        if (strcmp((*(hmap->keys+hash))->str, key->str) == 0)
+        if (cmp_string(*(hmap->keys+hash), key) == 0)
         {
             liberator(*(hmap->data+hash));
             free_string(hmap->keys+hash);
@@ -115,7 +115,7 @@ search_hashmap(Hashmap *hmap, const String *key)
     {
         hash = calc_hash(hmap->size, i, key);
         if (*(hmap->keys+hash) == NULL) return NULL;
-        if (strcmp((*(hmap->keys+hash))->str, key->str) == 0) return *(hmap->data+hash);
+        if (cmp_string(*(hmap->keys+hash), key) == 0) return *(hmap->data+hash);
     }
     return NULL;
 }

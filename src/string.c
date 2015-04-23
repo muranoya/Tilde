@@ -93,6 +93,18 @@ append3_string(String *dst, const char *src)
     dst->len += len;
 }
 
+int
+cmp_string(const String *s1, const String *s2)
+{
+    return strcmp(s1->str, s2->str);
+}
+
+int
+cmp2_string(const String *s1, const char *s2)
+{
+    return strcmp(s1->str, s2);
+}
+
 static void
 realloc_string(String *string, int newsize)
 {

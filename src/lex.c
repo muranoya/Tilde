@@ -592,7 +592,7 @@ set_keyword(Token *tk)
     int i;
     for (i = 0; keywords[i] != 0; i++)
     {
-        if (strcmp(keywords[i], tk->str->str) == 0)
+        if (cmp2_string(tk->str, keywords[i]) == 0)
         {
             tk->kind = TK_KEYWORD;
             return;
