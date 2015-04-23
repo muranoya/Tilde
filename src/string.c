@@ -11,7 +11,9 @@ String *
 make_string()
 {
     String *string = (String*)malloc(sizeof(String));
+    if (string == NULL) malloc_error();
     string->str = (char*)malloc(sizeof(char)*INIT_LEN);
+    if (string->str == NULL) malloc_error();
     string->len = 0;
     string->size = INIT_LEN;
     return string;
@@ -95,6 +97,7 @@ static void
 realloc_string(String *string, int newsize)
 {
     string->str = (char*)realloc(string->str, sizeof(char)*newsize);
+    if (string->str == NULL) malloc_error();
     string->size = newsize;
 }
 

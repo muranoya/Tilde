@@ -150,6 +150,7 @@ next_token()
     int c;
     skip();
     token = (Token*)malloc(sizeof(Token));
+    if (token == NULL) malloc_error();
     c = nextchar();
 
     token->kind = TK_INVALID;

@@ -34,17 +34,19 @@ typedef struct
 
 enum TokenKind
 {
+    TK_INVALID,
     TK_KEYWORD,
     TK_IDENT,
     TK_CONSTANT,
     TK_STRING,
     TK_PUNCTUATOR,
     TK_ENDFILE,
-    TK_INVALID, // not be set.
 };
 
 enum PnctID
 {
+    P_INVALID,
+
     P_SQR_BRCK_L,
     P_SQR_BRCK_R,
     P_PAREN_L,
@@ -94,8 +96,6 @@ enum PnctID
     P_ASGN_AMPD,
     P_ASGN_CARET,
     P_ASGN_VBAR,
-
-    P_INVALID,
 };
 
 typedef struct
@@ -288,30 +288,29 @@ void    append2_string(String *dst, char c);
 void    append3_string(String *dst, const char *src);
 
 // list.c
-void  liberator_void(void *);
+void liberator_void(void *);
 List *make_list();
-void  free_list(List **list, void (*liberator)(void*));
-int   count_list(const List *list);
-void  add_list(List *list, void *data);
-bool  remove_list(List *list, void (*liberator)(void*), int n);
-bool  remove_cmp_list(List *list,
-        int (*cmp)(void*, void*),
-        void (*liberator)(void*), void *data);
-void  *at_list(List *list, int n);
-void  *pop_list(List *list);
-void  *dequeue_list(List *list);
-void  init_iter_list(const List *list, iter_list *iter);
-bool  hasnext_iter_list(const iter_list *iter);
-void  next_iter_list(iter_list *iter);
+void free_list(List **list, void (*liberator)(void*));
+void add_list(List *list, void *data);
+bool remove_list(List *list, void (*liberator)(void*), int n);
+void *at_list(List *list, int n);
+void *pop_list(List *list);
+void init_iter_list(const List *list, iter_list *iter);
+bool hasnext_iter_list(const iter_list *iter);
+void next_iter_list(iter_list *iter);
 void *value_iter_list(const iter_list *iter);
 
 // hashmap.c
 Hashmap *make_hashmap(int size);
-void     free_hashmap(Hashmap **h, void (*liberator)(void*));
-bool     add_hashmap(Hashmap *h, const String *key, void *data);
-bool     remove_hashmap(Hashmap *h, const String *key,
-        void (*liberator)(void*));
-bool     exists_hashmap(Hashmap *h, const String *key);
-void    *search_hashmap(Hashmap *h, const String *key);
+void free_hashmap(Hashmap **h, void (*liberator)(void*));
+bool add_hashmap(Hashmap *h, const String *key, void *data);
+bool remove_hashmap(Hashmap *h, const String *key, void (*liberator)(void*));
+bool exists_hashmap(Hashmap *h, const String *key);
+void *search_hashmap(Hashmap *h, const String *key);
+
+// error.c
+void print_error(int row, int col, const char *f, ...);
+void exit_error(int row, int col, const char *f, ...);
+void malloc_error();
 #endif
 
