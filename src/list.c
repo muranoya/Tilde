@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include "tilde.h"
 
 struct List_body
@@ -29,25 +28,21 @@ free_list(List **list, void (*liberator)(void *))
 {
     struct List_body *now, *next;
 
-    if ((*list)->len == 0) return;
-    now = (*list)->head;
-    next = now->next;
-    for (;;)
+    if ((*list)->len > 0)
     {
-        liberator(now->data);
-        free(now);
-        if (next == NULL) return;
-        now = next;
-        next = next->next;
+        now = (*list)->head;
+        next = now->next;
+        for (;;)
+        {
+            liberator(now->data);
+            free(now);
+            if (next == NULL) return;
+            now = next;
+            next = next->next;
+        }
     }
     free(*list);
     *list = NULL;
-}
-
-int
-count_list(const List *list)
-{
-    return list->len;
 }
 
 void
@@ -141,48 +136,6 @@ remove_list(List *list, void (*liberator)(void *), int n)
     }
 }
 
-bool
-remove_cmp_list(List *list,
-        int (*cmp)(void*, void*),
-        void (*liberator)(void*), void *data)
-{
-    struct List_body *b;
-
-    for (b = list->head;;)
-    {
-        if (b == NULL) return false;
-
-        if (cmp(data, b->data) == 0)
-        {
-            if (b == list->head && b == list->tail)
-            {
-                list->head = list->tail = NULL;
-            }
-            else if (b == list->head)
-            {
-                list->head = b->next;
-                if (b->next != NULL) b->next->prev = NULL;
-            }
-            else if (b == list->tail)
-            {
-                list->tail = b->prev;
-                if (b->prev != NULL) b->prev->next = NULL;
-            }
-            else
-            {
-                b->prev->next = b->next;
-                b->next->prev = b->prev;
-            }
-            liberator(b->data);
-            free(b);
-            list->len--;
-            return true;
-        }
-        b = b->next;
-    }
-    return false;
-}
-
 void *
 at_list(List *list, int n)
 {
@@ -193,7 +146,7 @@ at_list(List *list, int n)
     if (n >= list->len / 2)
     {
         b = list->tail;
-        for (n = list->len-1-n;; --n)
+        for (n = list->len-1-n; ; --n)
         {
             if (n == 0) return b->data;
             b = b->prev;
@@ -214,61 +167,26 @@ void *
 pop_list(List *list)
 {
     void *ret;
-    int len;
-
-    len = count_list(list);
+    int len = list->len;
     if (len == 0) return NULL;
-
     ret = at_list(list, len-1);
     remove_list(list, liberator_void, len-1);
     return ret;
 }
 
-void *
-dequeue_list(List *list)
-{
-    void *ret;
-    int len;
-
-    len = count_list(list);
-    if (len == 0) return NULL;
-
-    ret = at_list(list, 0);
-    remove_list(list, liberator_void, 0);
-    return ret;
-}
-
 void
-init_iter_list(const List *list, iter_list *iter)
-{
-    iter->p = list->head;
-}
+init_iter_list(const List *list, iter_list *iter) { iter->p = list->head; }
 
 bool
-hasnext_iter_list(const iter_list *iter)
-{
-    return iter->p != NULL;
-}
+hasnext_iter_list(const iter_list *iter) { return iter->p != NULL; }
 
 void
-next_iter_list(iter_list *iter)
-{
-    if (iter->p != NULL) iter->p = iter->p->next;
-}
+next_iter_list(iter_list *iter) { if (iter->p != NULL) iter->p = iter->p->next; }
 
 void *
-value_iter_list(const iter_list *iter)
-{
-    return iter->p->data;
-}
+value_iter_list(const iter_list *iter) { return iter->p->data; }
 
 #ifdef TEST_LIST
-int
-cmp_debug(void *a, void *b)
-{
-    return strcmp((char*)a, (char*)b);
-}
-
 void
 debug_print(const List *list)
 {
@@ -276,8 +194,8 @@ debug_print(const List *list)
 
     printf("[");
     for (init_iter_list(list, &iter);
-            hasnext_iter_list(&iter);
-            next_iter_list(&iter))
+         hasnext_iter_list(&iter);
+         next_iter_list(&iter))
     {
         printf("%s, ", (char*)value_iter_list(&iter));
     }
@@ -298,19 +216,17 @@ main(int argc, char *argv[])
     debug_print(list);
 
     // if correct, print c
-    printf("%s\n", (char*)at_list(list, count_list(list)-1));
+    printf("%s\n", (char*)at_list(list, list->len-1));
 
     // if correct, print c
     printf("%s\n", (char*)pop_list(list));
     // if correct, print [a, b, ]
     debug_print(list);
 
-    // if correct, print a
-    printf("%s\n", (char*)dequeue_list(list));
-    // if correct, print [b, ]
+    // if correct, print [a, b, ]
     debug_print(list);
 
-    // if correct, print []
+    // if correct, print [b, ]
     remove_list(list, liberator_void, 0);
     debug_print(list);
 
@@ -322,10 +238,6 @@ main(int argc, char *argv[])
     add_list(list, "test");
     debug_print(list);
 
-    // if correct, print []
-    remove_cmp_list(list, cmp_debug, liberator_void, "test");
-    debug_print(list);
-    
     free_list(&list, liberator_void);
 
     fprintf(stderr, "\n");
