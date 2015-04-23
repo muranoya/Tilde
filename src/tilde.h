@@ -12,12 +12,7 @@ typedef struct
     int size;
 } String;
 
-struct hashmap_list;
-typedef struct
-{
-    struct hashmap_list *list;
-    int size;
-} Hashmap;
+typedef struct Hashmap Hashmap;
 
 struct List_body;
 typedef struct

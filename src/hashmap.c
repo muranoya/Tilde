@@ -1,59 +1,53 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include "tilde.h"
 
-struct hashmap_container
+struct Hashmap
 {
-    String *key;
-    void *data;
-    struct hashmap_container *next;
+    String **keys; // array of String*
+    void **data;   // array of void*
+    int size;
+    int amount_size;
 };
 
-struct hashmap_list
-{
-    struct hashmap_container *head;
-    struct hashmap_container *tail;
-    int len;
-};
+typedef unsigned int uint;
 
-static unsigned int calc_hash(unsigned int size, const String *key);
-static void free_hashmaplist(struct hashmap_list *list, void (*)(void*));
+static uint calc_hash(uint size, int c, const String *key);
+static void rehash(Hashmap *hmap);
 
 Hashmap *
 make_hashmap(int size)
 {
     Hashmap *hmap;
-    struct hashmap_list *list;
-    int i;
 
-    if (size <= 0)
-    {
-        return NULL;
-    }
+    if (size <= 0) return NULL;
+
     hmap = (Hashmap*)malloc(sizeof(Hashmap));
-    hmap->list = (struct hashmap_list*)malloc(sizeof(struct hashmap_list)*size);
-    hmap->size = size;
+    if (hmap == NULL) malloc_error();
+    hmap->keys = calloc(size, sizeof(String*));
+    if (hmap->keys == NULL) malloc_error();
+    hmap->data = calloc(size, sizeof(void*));
+    if (hmap->data == NULL) malloc_error();
 
-    for (i = 0; i < size; ++i)
-    {
-        list = hmap->list+i;
-        list->head = list->tail = NULL;
-        list->len = 0;
-    }
+    hmap->size = size;
+    hmap->amount_size = 0;
     return hmap;
 }
 
 void
 free_hashmap(Hashmap **hmap, void (*liberator)(void*))
 {
+    Hashmap *hm = *hmap;
     int i;
-    for (i = 0; i < (*hmap)->size; ++i)
+    for (i = 0; i < hm->size; ++i)
     {
-        free_hashmaplist((*hmap)->list+i, liberator);
+        if (*(hm->keys+i) == NULL) continue;
+        free_string(hm->keys+i);
+        liberator(*(hm->data+i));
     }
-    free((*hmap)->list);
+    free(hm->keys);
+    free(hm->data);
     free(*hmap);
     *hmap = NULL;
 }
@@ -62,59 +56,47 @@ bool
 add_hashmap(Hashmap *hmap, const String *key, void *data)
 {
     unsigned int hash;
-    struct hashmap_container *container;
-    struct hashmap_list *list;
-    
+    int i;
+
     if (exists_hashmap(hmap, key)) return false;
+    if (hmap->amount_size > (int)(hmap->size*0.7)) rehash(hmap);
 
-    hash = calc_hash(hmap->size, key);
-    container = (struct hashmap_container *)malloc(sizeof(struct hashmap_container));
-    list = hmap->list+hash;
-
-    container->key = new_string(key);
-    container->data = data;
-    container->next = NULL;
-
-    if (list->len == 0)
+    for (i = 0; ; ++i)
     {
-        list->head = container;
-        list->tail = container;
+        hash = calc_hash(hmap->size, i, key);
+        if (*(hmap->keys+hash) == NULL)
+        {
+            *(hmap->keys+hash) = new_string(key);
+            *(hmap->data+hash) = data;
+            break;
+        }
     }
-    else
-    {
-        list->tail->next = container;
-        list->tail = container;
-    }
-    list->len++;
+
+    hmap->amount_size++;
     return true;
 }
 
 bool
 remove_hashmap(Hashmap *hmap, const String *key, void (*liberator)(void*))
 {
-    unsigned int hash = calc_hash(hmap->size, key);
-    struct hashmap_list *list;
-    struct hashmap_container *now, *prev = NULL;
+    uint hash;
+    int i;
 
-    list = hmap->list+hash;
-    now = list->head;
-    for (;;)
+    for (i = 0; i < hmap->amount_size; ++i)
     {
-        if (now == NULL) return false;
-        if (strcmp(key->str, now->key->str) == 0)
+        hash = calc_hash(hmap->size, i, key);
+        if (*(hmap->keys+hash) == NULL) return false;
+        if (strcmp((*(hmap->keys+hash))->str, key->str) == 0)
         {
-            if (list->head == now) list->head = now->next;
-            if (list->tail == now) list->tail = prev;
-            if (prev != NULL) prev->next = now->next;
-            liberator(now->data);
-            free_string(&now->key);
-            free(now);
-            list->len--;
+            liberator(*(hmap->data+hash));
+            free_string(hmap->keys+hash);
+            *(hmap->keys+hash) = NULL;
+            *(hmap->data+hash) = NULL;
+            hmap->amount_size--;
             return true;
         }
-        prev = now;
-        now = now->next;
     }
+    return false;
 }
 
 bool
@@ -126,101 +108,88 @@ exists_hashmap(Hashmap *hmap, const String *key)
 void *
 search_hashmap(Hashmap *hmap, const String *key)
 {
-    unsigned int hash = calc_hash(hmap->size, key);
-    struct hashmap_container *container = (hmap->list+hash)->head;
-
-    for (;;)
+    uint hash;
+    int i;
+    
+    for (i = 0; i < hmap->amount_size; ++i)
     {
-        if (container == NULL) return NULL;
-        if (strcmp(key->str, container->key->str) == 0)
-        {
-            return container->data;
-        }
-        container = container->next;
+        hash = calc_hash(hmap->size, i, key);
+        if (*(hmap->keys+hash) == NULL) return NULL;
+        if (strcmp((*(hmap->keys+hash))->str, key->str) == 0) return *(hmap->data+hash);
     }
+    return NULL;
 }
 
-static unsigned int
-calc_hash(unsigned int size, const String *key)
+static uint
+calc_hash(uint size, int c, const String *key)
 {
     // FNV Hash
-    unsigned int hash;
-    int i;
-    int len = key->len;
+    uint hash = 2166136261u;
+    int i, len = key->len;
 
-    hash = 2166136261u;
-    for(i = 0 ; i < len; ++i)
+    for (i = 0 ; i < len; ++i)
     {
         hash = (16777619u*hash) ^ (*key->str+i);
     }
-    return hash % size;
+    return (hash+c) % size;
 }
 
 static void
-free_hashmaplist(struct hashmap_list *list, void (*liberator)(void*))
+rehash(Hashmap *hmap)
 {
-    struct hashmap_container *now, *next;
-    
-    if (list->len == 0) return;
-    now = list->head;
-    next = now->next;
-    
-    for (;;)
+    uint hash;
+    int i, j;
+    int new_size;
+    String **new_keys;
+    void **new_data;
+
+    new_size = hmap->size * 2;
+    new_keys = calloc(new_size, sizeof(String*));
+    if (new_keys == NULL) malloc_error();
+    new_data = calloc(new_size, sizeof(void*));
+    if (new_data == NULL) malloc_error();
+
+    for (i = 0; i < hmap->size; ++i)
     {
-        liberator(now->data);
-        free_string(&now->key);
-        free(now);
-        if (next == NULL) return;
-        now = next;
-        next = next->next;
+        if (*(hmap->keys+i) == NULL) continue;
+        for (j = 0; ; ++j)
+        {
+            hash = calc_hash(new_size, j, *(hmap->keys+i));
+            if (*(new_keys+hash) == NULL)
+            {
+                *(new_keys+hash) = *(hmap->keys+i);
+                *(new_data+hash) = *(hmap->data+i);
+                break;
+            }
+        }
     }
+
+    free(hmap->keys);
+    free(hmap->data);
+    hmap->size = new_size;
+    hmap->keys = new_keys;
+    hmap->data = new_data;
 }
 
 #ifdef TEST_HASHMAP
-static int
-count(const Hashmap *hmap)
-{
-    int s, i;
-    for (s = i = 0; i < hmap->size; ++i)
-    {
-        s += (hmap->list+i)->len;
-    }
-    return s;
-}
-
 static void
 debug_print(const Hashmap *hmap)
 {
-    struct hashmap_list *list;
-    struct hashmap_container *container;
     int i;
     for (i = 0; i < hmap->size; ++i)
     {
-        list = hmap->list+i;
-        container = list->head;
-        for (;;)
+        if (*(hmap->keys+i) != NULL)
         {
-            if (container != NULL)
-            {
-                printf("key=%s, val=%d, hash=%d\n",
-                        container->key->str,
-                        *(int*)container->data,
-                        calc_hash(hmap->size, container->key));
-            }
-            else
-            {
-                break;
-            }
-            container = container->next;
+            printf("key=%s, val=%d, hash=%d\n",
+                    (*(hmap->keys+i))->str,
+                    *(int*)(*(hmap->data+i)),
+                    calc_hash(hmap->size, 0, *(hmap->keys+i)));
         }
     }
 }
 
 static void
-liberator_int(void *data)
-{
-    free(data);
-}
+liberator_int(void *data) { free(data); }
 
 int
 main(int argc, char *argv[])
@@ -298,7 +267,7 @@ main(int argc, char *argv[])
         }
         else if (strncmp(buf, "all", 3) == 0)
         {
-            printf("All items = %d\n", count(map));
+            printf("Hashmap size = %d\nAll items = %d\n", map->size, map->amount_size);
             debug_print(map);
         }
         else
