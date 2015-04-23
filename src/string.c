@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include "tilde.h"
 
 #define INIT_LEN (16)
@@ -49,17 +48,14 @@ append_string(String *dst, const String *src)
     int i;
     char *s, *d;
 
-    if (dst->size <= dst->len + src->len + 1)
+    if (dst->size <= (dst->len + src->len + 1))
     {
         realloc_string(dst, dst->size + src->len + 1);
     }
 
     s = src->str;
     d = dst->str+dst->len;
-    for (i = 0; i < src->len; ++i)
-    {
-        *d++ = *s++;
-    }
+    for (i = 0; i < src->len; ++i) *d++ = *s++;
     *d = '\0';
     dst->len += src->len;
 }
@@ -67,7 +63,7 @@ append_string(String *dst, const String *src)
 void
 append2_string(String *dst, char c)
 {
-    if (dst->size <= dst->len + 2)
+    if (dst->size <= (dst->len + 2))
     {
         realloc_string(dst, dst->size + INIT_LEN);
     }
@@ -84,7 +80,7 @@ append3_string(String *dst, const char *src)
     char *d;
 
     len = strlen(src);
-    if (dst->size <= dst->len + len + 1)
+    if (dst->size <= (dst->len + len + 1))
     {
         realloc_string(dst, dst->size + len + 1);
     }
@@ -99,11 +95,6 @@ static void
 realloc_string(String *string, int newsize)
 {
     string->str = (char*)realloc(string->str, sizeof(char)*newsize);
-    if (string->str == NULL)
-    {
-        // error
-    }
-
     string->size = newsize;
 }
 
