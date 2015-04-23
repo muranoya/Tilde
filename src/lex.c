@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-
 #include "tilde.h"
 
 #define STACK_SIZE (8)
@@ -20,7 +19,7 @@ static char *keywords[] =
     "static", "default", "inline", "struct", "do",       "int",
     "uint",   "switch",  "double", "long",   "ulong",    "typedef",
     "else",   "union",   "extern", "true",   "false",    "volatile",
-    0,
+    NULL,
 };
 
 static Token *endtoken = &(Token){.kind = TK_ENDFILE, .str = NULL};
@@ -254,9 +253,7 @@ free_token(Token **tk)
 static bool
 make_ident(Token *tk, int c)
 {
-    String *ident;
-
-    ident = make_string();
+    String *ident = make_string();
     tk->kind = TK_IDENT;
     tk->row = line;
     tk->col = column;
@@ -409,26 +406,16 @@ make_string_literal(Token *tk)
     for (;;)
     {
         c = nextchar();
-        if (c == '\n')
-        {
-            return false;
-        }
-        else if (c == '"')
+        if (c == '\n') return false;
+        if (c == '"')
         {
             append2_string(str, '\0');
             return true;
         }
-        else
+        append2_string(str, c);
+        if (c == '\\' && is_simple_escape())
         {
-            if (c == '\\' && is_simple_escape())
-            {
-                append2_string(str, '\\');
-                append2_string(str, nextchar());
-            }
-            else
-            {
-                append2_string(str, c);
-            }
+            append2_string(str, nextchar());
         }
     }
 }
@@ -442,18 +429,12 @@ make_punctuator(Token *tk, int c)
     tk->str = NULL;
     switch (c)
     {
-    case '[':
-        tk->id = P_SQR_BRCK_L; break;
-    case ']':
-        tk->id = P_SQR_BRCK_R; break;
-    case '(':
-        tk->id = P_PAREN_L; break;
-    case ')':
-        tk->id = P_PAREN_R; break;
-    case '{':
-        tk->id = P_CRL_BRCK_L; break;
-    case '}':
-        tk->id = P_CRL_BRCK_R; break;
+    case '[': tk->id = P_SQR_BRCK_L; break;
+    case ']': tk->id = P_SQR_BRCK_R; break;
+    case '(': tk->id = P_PAREN_L; break;
+    case ')': tk->id = P_PAREN_R; break;
+    case '{': tk->id = P_CRL_BRCK_L; break;
+    case '}': tk->id = P_CRL_BRCK_R; break;
     case '.':
         if (estimate('.'))
         {
@@ -471,8 +452,7 @@ make_punctuator(Token *tk, int c)
             tk->id = P_DOT;
         }
         break;
-    case ',':
-        tk->id = P_COMMA; break;
+    case ',': tk->id = P_COMMA; break;
     case '-':
         c = nextchar();
         if (c == '>')      tk->id = P_ARRW;
@@ -504,30 +484,15 @@ make_punctuator(Token *tk, int c)
             pushback(c);
         }
         break;
-    case '*':
-        tk->id = estimate('=') ? P_ASGN_MULT : P_MULT;
-        break;
-    case '~':
-        tk->id = P_TILDE; break;
-    case '!':
-        tk->id = estimate('=') ? P_NEQ : P_EXCM;
-        break;
-    case '/':
-        tk->id = estimate('=') ? P_ASGN_DIV : P_DIV;
-        break;
-    case '%':
-        tk->id = estimate('=') ? P_ASGN_MOD : P_MOD;
-        break;
+    case '*': tk->id = estimate('=') ? P_ASGN_MULT : P_MULT; break;
+    case '~': tk->id = P_TILDE; break;
+    case '!': tk->id = estimate('=') ? P_NEQ       : P_EXCM; break;
+    case '/': tk->id = estimate('=') ? P_ASGN_DIV  : P_DIV;  break;
+    case '%': tk->id = estimate('=') ? P_ASGN_MOD  : P_MOD;  break;
     case '<':
         c = nextchar();
-        if (c == '<')
-        {
-            tk->id = estimate('=') ? P_ASGN_SHIFT_L : P_SHIFT_L;
-        }
-        else if (c == '=')
-        {
-            tk->id = P_LESS_EQ;
-        }
+        if (c == '<')      tk->id = estimate('=') ? P_ASGN_SHIFT_L : P_SHIFT_L;
+        else if (c == '=') tk->id = P_LESS_EQ;
         else
         {
             tk->id = P_LESS;
@@ -536,54 +501,30 @@ make_punctuator(Token *tk, int c)
         break;
     case '>':
         c = nextchar();
-        if (c == '>')
-        {
-            tk->id = estimate('=') ? P_ASGN_SHIFT_R : P_SHIFT_R;
-        }
-        else if (c == '=')
-        {
-            tk->id = P_GRT_EQ;
-        }
+        if (c == '>')      tk->id = estimate('=') ? P_ASGN_SHIFT_R : P_SHIFT_R;
+        else if (c == '=') tk->id = P_GRT_EQ;
         else
         {
             tk->id = P_GRT;
             pushback(c);
         }
         break;
-    case '=':
-        tk->id = estimate('=') ? P_EQ : P_ASGN;
-        break;
-    case '^':
-        tk->id = estimate('=') ? P_ASGN_CARET : P_CARET;
-        break;
+    case '=': tk->id = estimate('=') ? P_EQ         : P_ASGN;  break;
+    case '^': tk->id = estimate('=') ? P_ASGN_CARET : P_CARET; break;
     case '|':
         c = nextchar();
-        if (c == '|')
-        {
-            tk->id = P_VBAR_VBAR;
-        }
-        else if (c == '=')
-        {
-            tk->id = P_ASGN_VBAR;
-        }
-        else
-        {
-            tk->id = P_VBAR;
-        }
+        if (c == '|')      tk->id = P_VBAR_VBAR;
+        else if (c == '=') tk->id = P_ASGN_VBAR;
+        else               tk->id = P_VBAR;
         break;
-    case '?':
-        tk->id = P_QMARK;
-        break;
-    case ':':
-        tk->id = P_COLON;
-        break;
-    case ';':
-        tk->id = P_SCOLON;
-        break;
+    case '?': tk->id = P_QMARK;  break;
+    case ':': tk->id = P_COLON;  break;
+    case ';': tk->id = P_SCOLON; break;
     }
 
     if (tk->id == P_INVALID)
     {
+        // error
         return false;
     }
     else
@@ -634,9 +575,6 @@ is_digit(int c, int base)
         return isdigit(c) ||
             c == 'a' || c == 'b' || c == 'c' || c == 'd' || c == 'e' || c == 'f' ||
             c == 'A' || c == 'B' || c == 'C' || c == 'D' || c == 'E' || c == 'F';
-    default:
-        //error
-        ;
     }
     return false;
 }
@@ -668,11 +606,8 @@ skip()
     for (;;)
     {
         c = nextchar();
-        if (is_space(c) || is_return(c))
-        {
-            continue;
-        }
-        else if (c == '/')
+        if (is_space(c) || is_return(c)) continue;
+        if (c == '/')
         {
             if (estimate('*'))
             {
@@ -743,18 +678,14 @@ int
 main(int argc, char *argv[])
 {
     Token *token;
-    int i;
 
     if (argc != 2) exit(EXIT_FAILURE);
 
     open_file(argv[1]);
-    for (i = 0;;) 
+    for (;;) 
     {
         token = next_token();
-        if (token->kind == TK_ENDFILE)
-        {
-            if (i++ == 4) break;
-        }
+        if (token->kind == TK_ENDFILE) break;
         print_token(token);
         free_token(&token);
     }
