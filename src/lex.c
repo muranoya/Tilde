@@ -149,7 +149,8 @@ Token *
 next_token()
 {
     Token *token;
-    int c;
+    int c, d;
+
     skip();
     token = (Token*)try_malloc(sizeof(Token));
     c = nextchar();
@@ -177,33 +178,33 @@ next_token()
     }
     else if (c == '\'')
     {
-        String *p = make_string();
         token->kind = TK_CONSTANT;
-        token->row = line;
-        token->col = column-1;
-        token->str = p;
+        token->str = make_string();
 
         c = nextchar();
         if (c == '\\')
         {
-            int d = nextchar();
+            d = nextchar();
             if (is_simple_escape(d))
             {
-                append2_string(p, '\\');
-                append2_string(p, d);
+                append2_string(token->str, '\\');
+                append2_string(token->str, d);
             }
             else
             {
-                print_error(token->row, token->col,
+                print_error(line, column,
                         "Invalid escape character \"%c\".", (char)d);
             }
         }
         else
         {
-            append2_string(p, c);
+            append2_string(token->str, c);
         }
         if (!estimate('\''))
         {
+            // Between the new line or single quotes,
+            // I will skip the character
+            for (; !(is_return(c) || c == '\'' || c == EOF); c = nextchar());
             print_error(token->row, token->col,
                     "Single quotation is required.");
         }
@@ -211,21 +212,18 @@ next_token()
     }
     else if (c == '.')
     {
-        c = nextchar();
-        if (is_digit(c, 10))
+        d = nextchar();
+        if (is_digit(d, 10))
         {
-            String *p = make_string();
-            pushback(c);
+            pushback(d);
             token->kind = TK_CONSTANT;
-            token->row = line;
-            token->col = column-1;
-            token->str = p;
-            make_float_base('.', 10, p);
+            token->str = make_string();
+            make_float_base('.', 10, token->str);
             return token;
         }
         else
         {
-            pushback(c);
+            pushback(d);
         }
     }
     else if (c == EOF)
@@ -245,7 +243,6 @@ next_token()
         pushback(c);
     }
 
-    print_error(line, column, "Invalid token.");
     exit(EXIT_FAILURE);
 }
 
@@ -336,13 +333,6 @@ make_digit_base(int c, int base, String *p)
 static bool
 make_float_base(int c, int base, String *p)
 {
-    if (!(base == 10 && (c == '.' || c == 'e' || c == 'E')) &&
-        !(base == 16 && (c == '.' || c == 'p' || c == 'P')))
-    {
-        //error
-        return false;
-    }
-
     if (c == '.')
     {
         append2_string(p, c);
@@ -354,18 +344,6 @@ make_float_base(int c, int base, String *p)
                 append2_string(p, c);
             }
         }
-    }
-    else if (base == 10)
-    {
-        if (c != 'e' && c != 'E')
-        {
-            //error
-        }
-    }
-
-    if (base == 16 && c != 'p' && c != 'P')
-    {
-        //error
     }
 
     if (c == 'e' || c == 'E' || c == 'p' || c == 'P')
@@ -387,6 +365,10 @@ make_float_base(int c, int base, String *p)
     if (c == 'f' || c == 'F' || c == 'l' || c == 'L')
     {
         append2_string(p, c);
+    }
+    else
+    {
+        pushback(c);
     }
     return true;
 }
@@ -454,7 +436,7 @@ make_punctuator(Token *tk, int c)
             }
             else
             {
-                // error
+                print_error(line, column, "Probably, '...'");
             }
         }
         else
@@ -534,7 +516,6 @@ make_punctuator(Token *tk, int c)
 
     if (tk->id == P_INVALID)
     {
-        // error
         return false;
     }
     else
@@ -642,16 +623,7 @@ skip()
 }
 
 static void
-pushback(int c)
-{
-    if (sp >= STACK_SIZE)
-    {
-        fprintf(stderr, "Error: %d:%d The lexical analyzer stack was overflow.\n",
-                line, column);
-        exit(EXIT_FAILURE);
-    }
-    char_stack[sp++] = c;
-}
+pushback(int c) { char_stack[sp++] = c; }
 
 static int
 nextchar()
