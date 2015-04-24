@@ -27,3 +27,27 @@ malloc_error()
     exit(EXIT_FAILURE);
 }
 
+void *
+try_malloc(size_t size)
+{
+    void *ret = malloc(size);
+    if (ret == NULL) malloc_error();
+    return ret;
+}
+
+void *
+try_calloc(size_t n, size_t size)
+{
+    void *ret = calloc(n, size);
+    if (ret == NULL) malloc_error();
+    return ret;
+}
+
+void *
+try_realloc(void *ptr, size_t size)
+{
+    void *ret = realloc(ptr, size);
+    if (ret == NULL) malloc_error();
+    return ret;
+}
+

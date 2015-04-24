@@ -23,12 +23,9 @@ make_hashmap(int size)
 
     if (size <= 0) return NULL;
 
-    hmap = (Hashmap*)malloc(sizeof(Hashmap));
-    if (hmap == NULL) malloc_error();
-    hmap->keys = calloc(size, sizeof(String*));
-    if (hmap->keys == NULL) malloc_error();
-    hmap->data = calloc(size, sizeof(void*));
-    if (hmap->data == NULL) malloc_error();
+    hmap = (Hashmap*)try_malloc(sizeof(Hashmap));
+    hmap->keys = (String**)try_calloc(size, sizeof(String*));
+    hmap->data = (void**)try_calloc(size, sizeof(void*));
 
     hmap->size = size;
     hmap->amount_size = 0;
@@ -144,10 +141,8 @@ rehash(Hashmap *hmap)
     void **new_data;
 
     new_size = hmap->size * 2;
-    new_keys = calloc(new_size, sizeof(String*));
-    if (new_keys == NULL) malloc_error();
-    new_data = calloc(new_size, sizeof(void*));
-    if (new_data == NULL) malloc_error();
+    new_keys = (String**)try_calloc(new_size, sizeof(String*));
+    new_data = (void**)try_calloc(new_size, sizeof(void*));
 
     for (i = 0; i < hmap->size; ++i)
     {

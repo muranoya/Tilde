@@ -10,10 +10,8 @@ static void realloc_string(String *string, int newsize);
 String *
 make_string()
 {
-    String *string = (String*)malloc(sizeof(String));
-    if (string == NULL) malloc_error();
-    string->str = (char*)malloc(sizeof(char)*INIT_LEN);
-    if (string->str == NULL) malloc_error();
+    String *string = (String*)try_malloc(sizeof(String));
+    string->str = (char*)try_malloc(sizeof(char)*INIT_LEN);
     string->len = 0;
     string->size = INIT_LEN;
     return string;
@@ -108,8 +106,7 @@ cmp2_string(const String *s1, const char *s2)
 static void
 realloc_string(String *string, int newsize)
 {
-    string->str = (char*)realloc(string->str, sizeof(char)*newsize);
-    if (string->str == NULL) malloc_error();
+    string->str = (char*)try_realloc(string->str, sizeof(char)*newsize);
     string->size = newsize;
 }
 

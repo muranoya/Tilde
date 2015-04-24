@@ -15,8 +15,7 @@ void liberator_void(void *data) { }
 List *
 make_list()
 {
-    List *list = (List*)malloc(sizeof(List));
-    if (list == NULL) malloc_error();
+    List *list = (List*)try_malloc(sizeof(List));
     list->head = list->tail = NULL;
     list->len = 0;
     return list;
@@ -49,8 +48,7 @@ add_list(List *list, void *data)
 {
     struct List_body *newbody;
 
-    newbody = (struct List_body*)malloc(sizeof(struct List_body));
-    if (newbody == NULL) malloc_error();
+    newbody = (struct List_body*)try_malloc(sizeof(struct List_body));
     newbody->prev = newbody->next = NULL;
     newbody->data = data;
 

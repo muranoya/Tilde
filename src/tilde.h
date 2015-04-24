@@ -309,5 +309,8 @@ void *search_hashmap(Hashmap *h, const String *key);
 void print_error(int row, int col, const char *f, ...);
 void exit_error(int row, int col, const char *f, ...);
 void malloc_error();
+void *try_malloc(size_t size);
+void *try_calloc(size_t n, size_t size);
+void *try_realloc(void *ptr, size_t size);
 #endif
 
