@@ -1278,7 +1278,7 @@ static Node *
 malloc_node(enum AST ast)
 {
     Node *node;
-    node = (Node*)malloc(sizeof(Node));
+    node = (Node*)try_calloc(1, sizeof(Node));
     node->kind = ast;
 
     switch (ast)
@@ -1347,7 +1347,7 @@ static Type *
 malloc_type(enum TypeType tt)
 {
     Type *t;
-    t = (Type*)malloc(sizeof(Type));
+    t = (Type*)try_malloc(sizeof(Type));
     t->size = 0;
     t->align = 0;
     t->tt = tt;
@@ -1460,12 +1460,15 @@ output_node(FILE *f, const Node *node, const char *parent, const char *edge)
         {
             char *p = NULL, *t = NULL, str[256];
             snprintf(str, ARRAY_LEN(str), "node_%s", node->name->str);
-            if (node->sc == SC_NONE) p = "NONE";
+
+            if (node->sc == SC_NONE)         p = "NONE";
             else if (node->sc == SC_TYPEDEF) p = "TYPEDEF";
-            else if (node->sc == SC_EXTERN) p = "EXTERN";
-            else if (node->sc == SC_STATIC) p = "STATIC";
-            if (node->kind == AST_VAR_DECL) t = "VARDECL";
+            else if (node->sc == SC_EXTERN)  p = "EXTERN";
+            else if (node->sc == SC_STATIC)  p = "STATIC";
+
+            if (node->kind == AST_VAR_DECL)      t = "VARDECL";
             else if (node->kind == AST_FUNC_DEF) t = "FUNCDEF";
+
             fprintf(f, "%s [shape=box, label=\"%s\\nname=%s\\nsc=%s\"];\n",
                     str, t, node->name->str, p);
             if (parent != NULL)
