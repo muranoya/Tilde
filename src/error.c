@@ -7,9 +7,9 @@ void
 print_error(int row, int col, const char *f, ...)
 {
     va_list list;
-    fprintf(stderr, "Error:%d:%d: ", row, col);
+    fprintf(stderr, "\x1b[31mError:%d:%d: ", row, col);
     vfprintf(stderr, f, list);
-    fprintf(stderr, "\n");
+    fprintf(stderr, "\n\x1b[0m");
 }
 
 void
