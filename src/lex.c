@@ -33,7 +33,7 @@ static bool make_string_literal(Token *tk);
 static bool make_punctuator(Token *tk, int c);
 
 static bool estimate(int x);
-static bool is_simple_escape();
+static bool is_simple_escape(int c);
 static bool is_nondigit(int c);
 static bool is_digit(int c, int base);
 static bool is_space(int c);
@@ -83,9 +83,9 @@ print_token(const Token *tk)
     default:            p = "UNKNOWN";    break;
     }
 
-    s = tk->kind == TK_PUNCTUATOR ? punctuator_to_string(tk->id)
-                                  : tk->kind == TK_ENDFILE ? ""
-                                                           : tk->str->str;
+    if (tk->kind == TK_PUNCTUATOR)   s = punctuator_to_string(tk->id);
+    else if (tk->kind == TK_ENDFILE) s = "";
+    else                             s = tk->str->str;
     printf("%s (%d:%d)%s\n",
             p, tk->row, tk->col, s);
 }
@@ -186,21 +186,27 @@ next_token()
         c = nextchar();
         if (c == '\\')
         {
-            if (is_simple_escape())
+            int d = nextchar();
+            if (is_simple_escape(d))
             {
                 append2_string(p, '\\');
-                append2_string(p, nextchar());
+                append2_string(p, d);
             }
             else
             {
-                //error
+                print_error(token->row, token->col,
+                        "Invalid escape character \"%c\".", (char)d);
             }
         }
         else
         {
             append2_string(p, c);
         }
-        estimate('\'');
+        if (!estimate('\''))
+        {
+            print_error(token->row, token->col,
+                    "Single quotation is required.");
+        }
         return token;
     }
     else if (c == '.')
@@ -239,7 +245,7 @@ next_token()
         pushback(c);
     }
 
-    fprintf(stderr, "Error:%d:%d: Invalid token.\n", line, column);
+    print_error(line, column, "Invalid token.");
     exit(EXIT_FAILURE);
 }
 
@@ -389,7 +395,7 @@ static bool
 make_string_literal(Token *tk)
 {
     String *str;
-    int c;
+    int c, d;
 
     str = make_string();
     tk->kind = TK_STRING;
@@ -407,9 +413,18 @@ make_string_literal(Token *tk)
             return true;
         }
         append2_string(str, c);
-        if (c == '\\' && is_simple_escape())
+        if (c == '\\')
         {
-            append2_string(str, nextchar());
+            d = nextchar();
+            if (is_simple_escape(d))
+            {
+                append2_string(str, d);
+            }
+            else
+            {
+                print_error(tk->row, tk->col,
+                        "Invalid escape character \"%c\".", (char)d);
+            }
         }
     }
 }
@@ -434,6 +449,7 @@ make_punctuator(Token *tk, int c)
         {
             if (estimate('.'))
             {
+                tk->col--;
                 tk->id = P_TLEAD;
             }
             else
@@ -537,18 +553,15 @@ estimate(int x)
 }
 
 static bool
-is_simple_escape()
+is_simple_escape(int c)
 {
-    int c = nextchar();
     switch (c)
     {
     case '\'': case '"': case '?':  case '\\':
     case 'a':  case 'b': case 'f':  case 'n':
     case 'r':  case 't': case 'v':
-        pushback(c);
         return true;
     default:
-        pushback(c);
         return false;
     }
 }
