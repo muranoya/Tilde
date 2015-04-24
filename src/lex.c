@@ -27,7 +27,7 @@ static Token *endtoken = &(Token){.kind = TK_ENDFILE, .str = NULL};
 /* prototype */
 static bool make_ident(Token *tk, int c);
 static bool make_digit(Token *tk, int c);
-static bool make_digit_base(Token *tk, int c, int base, String *p);
+static bool make_digit_base(int c, int base, String *p);
 static bool make_float_base(int c, int base, String *p);
 static bool make_string_literal(Token *tk);
 static bool make_punctuator(Token *tk, int c);
@@ -83,7 +83,9 @@ print_token(const Token *tk)
     default:            p = "UNKNOWN";    break;
     }
 
-    s = (tk->kind == TK_PUNCTUATOR || tk->kind == TK_ENDFILE) ? "" : tk->str->str;
+    s = tk->kind == TK_PUNCTUATOR ? punctuator_to_string(tk->id)
+                                  : tk->kind == TK_ENDFILE ? ""
+                                                           : tk->str->str;
     printf("%s (%d:%d)%s\n",
             p, tk->row, tk->col, s);
 }
@@ -271,37 +273,29 @@ make_ident(Token *tk, int c)
 static bool
 make_digit(Token *tk, int c)
 {
-    String *val;
-    bool ret;
-
-    val = make_string();
     tk->kind = TK_CONSTANT;
     tk->row = line;
     tk->col = column;
-    tk->str = val;
+    tk->str = make_string();
     if (c == '0')
     {
         c = nextchar();
         if (c == 'x' || c == 'X')
         {
-            append3_string(val, "0x");
-            ret = make_digit_base(tk, nextchar(), 16, val);
+            append3_string(tk->str, "0x");
+            return make_digit_base(nextchar(), 16, tk->str);
         }
         else
         {
-            append2_string(val, '0');
-            ret = make_digit_base(tk, c, 8, val);
+            pushback(c);
+            c = '0';
         }
     }
-    else
-    {
-        ret = make_digit_base(tk, c, 10, val);
-    }
-    return ret;
+    return make_digit_base(c, 10, tk->str);
 }
 
 static bool
-make_digit_base(Token *tk, int c, int base, String *p)
+make_digit_base(int c, int base, String *p)
 {
     for (; is_digit(c, base); c = nextchar())
     {
@@ -568,12 +562,9 @@ is_digit(int c, int base)
 {
     switch (base)
     {
-    case 8:
-        return isdigit(c) && c != '8' && c != '9';
-    case 10:
-        return isdigit(c);
-    case 16:
-        return isdigit(c) ||
+    case 8:  return isdigit(c) && c != '8' && c != '9';
+    case 10: return isdigit(c);
+    case 16: return isdigit(c) ||
             c == 'a' || c == 'b' || c == 'c' || c == 'd' || c == 'e' || c == 'f' ||
             c == 'A' || c == 'B' || c == 'C' || c == 'D' || c == 'E' || c == 'F';
     }

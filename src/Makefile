@@ -1,4 +1,4 @@
-CC=clang-3.5
+CC=cc
 CFLAGS=-O2 -Wall
 
 llparser: llparser.c string.c lex.c hashmap.c list.c error.c
